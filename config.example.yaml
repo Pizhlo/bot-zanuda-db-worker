@@ -1,0 +1,32 @@
+
+log_level: "debug"
+instance_id: 1
+
+storage:
+  buffer_size: 100
+
+  postgres:
+    host: "localhost"
+    port: 5432
+    user: "user"
+    password: "password"
+    db_name: "test"    
+    insert_timeout: 50
+    read_timeout: 50
+  
+  rabbitmq:
+    address: "amqp://user:password@localhost:1234/"
+    note_queue: "notes"
+    space_queue: "spaces"
+    insert_timeout: 50
+    read_timeout: 50
+
+  elastic:
+    address: "http://localhost:1234"
+    insert_timeout: 50
+    read_timeout: 50
+
+  redis:
+    address: "localhost:2222"
+    insert_timeout: 50
+    read_timeout: 50

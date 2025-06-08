@@ -1,0 +1,20 @@
+package interfaces
+
+import (
+	"context"
+	"db-worker/internal/model"
+)
+
+// Handler определяет интерфейс для обработчиков сообщений
+//
+//go:generate mockgen -source=interfaces.go -destination=../mocks/mock_handler.go -package=mocks
+type Handler interface {
+	Handle(ctx context.Context, msg Message, shouldSave bool) error
+}
+
+// Message определяет интерфейс для сообщений.
+type Message interface {
+	MessageType() model.MessageType
+	OperationType() model.Operation
+	Model() any
+}
