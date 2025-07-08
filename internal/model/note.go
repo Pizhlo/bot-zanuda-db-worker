@@ -60,9 +60,56 @@ func (s CreateNoteRequest) Model() any {
 	return s
 }
 
+func (s CreateNoteRequest) GetRequestID() uuid.UUID {
+	return s.RequestID
+}
+
+func (s CreateNoteRequest) GetOperation() Operation {
+	return s.Operation
+}
+
+//	{
+//	    "request_id": "0a3d46d0-b9ea-4acd-bd9c-2a7bd0cabc4b",
+//	    "space_id": "842f6d7f-c8cc-4fd7-91c7-0d2e1c524732",
+//	    "user_id": 297850814,
+//	    "note_id": "62a8b9aa-a74b-4bde-b356-f5f4d73fb622",
+//	    "text": "new text",
+//	    "file": "",
+//	    "operation": "update",
+//	    "created": 1752000473
+//	}
+type UpdateNoteRequest struct {
+	ID        uuid.UUID `json:"note_id"`    // айди заметки
+	RequestID uuid.UUID `json:"request_id"` // айди запроса
+	UserID    int64     `json:"user_id"`    // кто создал заметку
+	SpaceID   uuid.UUID `json:"space_id"`   // айди пространства, куда сохранить заметку
+	Text      string    `json:"text"`       // текст заметки
+	Operation Operation `json:"operation"`  // какое действие сделать: создать, удалить, редактировать
+	File      string    `json:"file"`
+}
+
+func (UpdateNoteRequest) MessageType() MessageType {
+	return MessageTypeNoteUpdate
+}
+
+func (s UpdateNoteRequest) OperationType() Operation {
+	return s.Operation
+}
+
+func (s UpdateNoteRequest) Model() any {
+	return s
+}
+
+func (s UpdateNoteRequest) GetRequestID() uuid.UUID {
+	return s.RequestID
+}
+
+func (s UpdateNoteRequest) GetOperation() Operation {
+	return s.Operation
+}
+
 type Operation string
 
-// в будущем будет использоваться в других местах, когда реализуются хендлеры
 var (
 	CreateOp         Operation = "create"
 	UpdateOp         Operation = "update"

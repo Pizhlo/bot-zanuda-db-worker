@@ -25,13 +25,13 @@ type noteCreator interface {
 
 type createNoteHandlerOption func(*CreateNoteHandler)
 
-func WithBufferSize(bufferSize int) createNoteHandlerOption {
+func WithBufferSizeCreateNoteHandler(bufferSize int) createNoteHandlerOption {
 	return func(h *CreateNoteHandler) {
 		h.bufferSize = bufferSize
 	}
 }
 
-func WithNotesStorage(notesStorage noteCreator) createNoteHandlerOption {
+func WithNotesCreator(notesStorage noteCreator) createNoteHandlerOption {
 	return func(h *CreateNoteHandler) {
 		h.notesStorage = notesStorage
 	}

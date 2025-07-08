@@ -9,7 +9,8 @@ import (
 	postgres "db-worker/internal/storage/postgres/note_repo"
 	"db-worker/internal/storage/postgres/transaction"
 	"db-worker/internal/storage/rabbit"
-	uow "db-worker/internal/storage/uow/create_notes"
+	create_notes "db-worker/internal/storage/uow/create_notes"
+	update_notes "db-worker/internal/storage/uow/update_notes"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -18,7 +19,8 @@ import (
 type App struct {
 	Cfg         *config.Config
 	NoteSrv     *message.Service
-	NoteStorage *uow.UnitOfWork
+	NoteCreator *create_notes.UnitOfWork
+	NoteUpdater *update_notes.UnitOfWork
 	Rabbit      *rabbit.Worker
 	TxSaver     *transaction.Repo
 }
@@ -31,22 +33,27 @@ func NewApp(ctx context.Context, configPath string) (*App, error) {
 
 	setLogLevel(cfg.LogLevel)
 
-	msgChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
+	createNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
+	updateNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
 
 	txSaver := initTxSaver(cfg)
 
-	noteStorage := initNoteRepo(cfg, txSaver)
+	noteRepo := initNoteStorage(cfg)
 
-	createNoteHandler := initCreateNoteHandler(noteStorage, cfg.Storage.BufferSize)
+	uowCreateNote := initNoteCreator(cfg, txSaver, noteRepo)
+	uowUpdateNote := initNoteUpdater(cfg, txSaver, noteRepo)
 
-	rabbit := initRabbit(ctx, cfg, msgChan)
+	createNoteHandler := initCreateNoteHandler(uowCreateNote, cfg.Storage.BufferSize)
+	updateNoteHandler := initUpdateNoteHandler(uowUpdateNote, cfg.Storage.BufferSize)
 
-	noteSrv := initNoteSrv(ctx, createNoteHandler, msgChan)
+	rabbit := initRabbit(ctx, cfg, createNotesChan, updateNotesChan)
+
+	noteSrv := initNoteSrv(ctx, createNoteHandler, updateNoteHandler, createNotesChan, updateNotesChan)
 
 	return &App{
 		Cfg:         cfg,
 		NoteSrv:     noteSrv,
-		NoteStorage: noteStorage,
+		NoteCreator: uowCreateNote,
 		Rabbit:      rabbit,
 		TxSaver:     txSaver,
 	}, nil
@@ -64,8 +71,12 @@ func initTxSaver(cfg *config.Config) *transaction.Repo {
 	return txSaver
 }
 
-func initCreateNoteHandler(storage *uow.UnitOfWork, bufferSize int) interfaces.Handler {
-	return start(handler.NewCreateNoteHandler(handler.WithNotesStorage(storage), handler.WithBufferSize(bufferSize)))
+func initCreateNoteHandler(storage *create_notes.UnitOfWork, bufferSize int) interfaces.Handler {
+	return start(handler.NewCreateNoteHandler(handler.WithNotesCreator(storage), handler.WithBufferSizeCreateNoteHandler(bufferSize)))
+}
+
+func initUpdateNoteHandler(storage *update_notes.UnitOfWork, bufferSize int) interfaces.Handler {
+	return start(handler.NewUpdateNoteHandler(handler.WithNotesUpdater(storage), handler.WithBufferSizeUpdateNoteHandler(bufferSize)))
 }
 
 func setLogLevel(level string) {
@@ -91,14 +102,15 @@ func setLogLevel(level string) {
 	logrus.Infof("log level: %+v", logrus.GetLevel())
 }
 
-func initRabbit(ctx context.Context, cfg *config.Config, msgChan chan interfaces.Message) *rabbit.Worker {
+func initRabbit(ctx context.Context, cfg *config.Config, createNotesChan chan interfaces.Message, updateNotesChan chan interfaces.Message) *rabbit.Worker {
 	logrus.Infof("connecting rabbit on %s", cfg.Storage.RabbitMQ.Address)
 
 	rabbit := start(rabbit.New(
 		rabbit.WithAddress(cfg.Storage.RabbitMQ.Address),
 		rabbit.WithNotesTopic(cfg.Storage.RabbitMQ.NoteQueue),
 		rabbit.WithSpacesTopic(cfg.Storage.RabbitMQ.SpaceQueue),
-		rabbit.WithMsgChan(msgChan),
+		rabbit.WithCreateNotesChan(createNotesChan),
+		rabbit.WithUpdateNotesChan(updateNotesChan),
 		rabbit.WithInsertTimeout(cfg.Storage.RabbitMQ.InsertTimeout),
 		rabbit.WithReadTimeout(cfg.Storage.RabbitMQ.ReadTimeout),
 	))
@@ -112,10 +124,12 @@ func initRabbit(ctx context.Context, cfg *config.Config, msgChan chan interfaces
 	return rabbit
 }
 
-func initNoteSrv(ctx context.Context, createNoteHandler interfaces.Handler, msgChan chan interfaces.Message) *message.Service {
+func initNoteSrv(ctx context.Context, createNoteHandler interfaces.Handler, updateNoteHandler interfaces.Handler, createNotesChan chan interfaces.Message, updateNotesChan chan interfaces.Message) *message.Service {
 	noteSrv := start(message.New(
-		message.WithMsgChan(msgChan),
+		message.WithCreateNotesChan(createNotesChan),
+		message.WithUpdateNotesChan(updateNotesChan),
 		message.WithCreateHandler(createNoteHandler),
+		message.WithUpdateHandler(updateNoteHandler),
 	))
 
 	go noteSrv.Run(ctx)
@@ -123,17 +137,27 @@ func initNoteSrv(ctx context.Context, createNoteHandler interfaces.Handler, msgC
 	return noteSrv
 }
 
-func initNoteRepo(cfg *config.Config, txSaver *transaction.Repo) *uow.UnitOfWork {
+func initNoteStorage(cfg *config.Config) *postgres.Repo {
 	addr := formatPostgresAddr(cfg)
 
 	logrus.Infof("connecting db on %s", addr)
 
-	noteStorage := start(postgres.New(postgres.WithAddr(addr),
+	return start(postgres.New(postgres.WithAddr(addr),
 		postgres.WithInsertTimeout(cfg.Storage.Postgres.InsertTimeout),
 		postgres.WithReadTimeout(cfg.Storage.Postgres.ReadTimeout),
 	))
+}
 
-	return start(uow.NewUnitOfWork(uow.WithPostgres(noteStorage), uow.WithTxRepo(txSaver)))
+func initNoteCreator(cfg *config.Config, txSaver *transaction.Repo, noteStorage *postgres.Repo) *create_notes.UnitOfWork {
+	return start(create_notes.NewUnitOfWork(create_notes.WithPostgres(noteStorage), create_notes.WithTxRepo(txSaver)))
+}
+
+func initNoteUpdater(cfg *config.Config, txSaver *transaction.Repo, noteStorage *postgres.Repo) *update_notes.UnitOfWork {
+	addr := formatPostgresAddr(cfg)
+
+	logrus.Infof("connecting db on %s", addr)
+
+	return start(update_notes.NewUnitOfWork(update_notes.WithPostgres(noteStorage), update_notes.WithTxRepo(txSaver)))
 }
 
 func formatPostgresAddr(cfg *config.Config) string {

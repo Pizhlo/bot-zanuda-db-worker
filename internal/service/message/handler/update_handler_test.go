@@ -1,16 +1,13 @@
 package handler
 
 import (
-	"context"
-	"errors"
-	"sync"
-	"testing"
-	"time"
-
 	"db-worker/internal/model"
 	buffer "db-worker/internal/service/message/buffer"
 	mocks "db-worker/internal/service/message/handler/mocks"
 	interfaces "db-worker/internal/service/message/interface"
+	"errors"
+	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -18,39 +15,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewCreateNoteHandler(t *testing.T) {
+func TestNewUpdateNoteHandler(t *testing.T) {
 	type testCase struct {
 		name string
-		opts []createNoteHandlerOption
+		opts []updateNoteHandlerOption
 		want error
 	}
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
-	mockNotesStorage := mocks.NewMocknoteCreator(mockCtrl)
+	mockNotesStorage := mocks.NewMocknoteUpdater(mockCtrl)
 
 	tests := []testCase{
 		{
 			name: "success",
-			opts: []createNoteHandlerOption{
-				WithBufferSizeCreateNoteHandler(10),
-				WithNotesCreator(mockNotesStorage),
+			opts: []updateNoteHandlerOption{
+				WithBufferSizeUpdateNoteHandler(10),
+				WithNotesUpdater(mockNotesStorage),
 			},
 			want: nil,
 		},
 
 		{
 			name: "without buffer size",
-			opts: []createNoteHandlerOption{
-				WithNotesCreator(mockNotesStorage),
+			opts: []updateNoteHandlerOption{
+				WithNotesUpdater(mockNotesStorage),
 			},
 			want: errors.New("buffer size is 0"),
 		},
 		{
 			name: "without notes storage",
-			opts: []createNoteHandlerOption{
-				WithBufferSizeCreateNoteHandler(10),
+			opts: []updateNoteHandlerOption{
+				WithBufferSizeUpdateNoteHandler(10),
 			},
 			want: errors.New("notes storage is nil"),
 		},
@@ -58,7 +55,7 @@ func TestNewCreateNoteHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, err := NewCreateNoteHandler(tt.opts...)
+			handler, err := NewUpdateNoteHandler(tt.opts...)
 			if tt.want != nil {
 				require.EqualError(t, err, tt.want.Error())
 				assert.Nil(t, handler)
@@ -70,7 +67,7 @@ func TestNewCreateNoteHandler(t *testing.T) {
 	}
 }
 
-func TestHandleCreateNote(t *testing.T) {
+func TestHandleUpdateNote(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
@@ -83,7 +80,7 @@ func TestHandleCreateNote(t *testing.T) {
 		want          error
 	}
 
-	note := model.CreateNoteRequest{
+	note := model.UpdateNoteRequest{
 		Text: "test",
 		ID:   uuid.New(),
 	}
@@ -121,11 +118,11 @@ func TestHandleCreateNote(t *testing.T) {
 			storage := &mockStorage{
 				t:             t,
 				expectedCount: tt.expectedCount,
-				createdNotes:  make([]interfaces.Message, 0, len(tt.expectedNotes)),
+				updatedNotes:  make([]interfaces.Message, 0, len(tt.expectedNotes)),
 				done:          done,
 			}
 
-			handler, err := NewCreateNoteHandler(WithBufferSizeCreateNoteHandler(10), WithNotesCreator(storage))
+			handler, err := NewUpdateNoteHandler(WithBufferSizeUpdateNoteHandler(10), WithNotesUpdater(storage))
 			require.NoError(t, err)
 
 			handler.buffer = tt.buffer
@@ -143,9 +140,9 @@ func TestHandleCreateNote(t *testing.T) {
 						select {
 						case <-done:
 							// проверяем, что сохранилось нужное количество заметок
-							assert.Equal(t, len(tt.expectedNotes), len(storage.GetCreatedNotes()))
+							assert.Equal(t, len(tt.expectedNotes), len(storage.GetUpdatedNotes()))
 							// проверяем, что сохранились правильные заметки
-							assert.Equal(t, tt.expectedNotes, storage.GetCreatedNotes())
+							assert.Equal(t, tt.expectedNotes, storage.GetUpdatedNotes())
 							return
 						case <-time.After(1 * time.Second):
 							t.Fatalf("timeout")
@@ -155,75 +152,4 @@ func TestHandleCreateNote(t *testing.T) {
 			}
 		})
 	}
-}
-
-type mockStorage struct {
-	t             *testing.T
-	mu            sync.Mutex
-	wg            sync.WaitGroup
-	expectedCount int
-	done          chan struct{}
-	createdNotes  []interfaces.Message
-	updatedNotes  []interfaces.Message
-}
-
-func (m *mockStorage) SaveNotes(ctx context.Context, notes []interfaces.Message) {
-	m.t.Helper()
-
-	m.wg.Add(1)
-	defer m.wg.Done()
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.createdNotes = append(m.createdNotes, notes...)
-
-	if len(m.createdNotes) == m.expectedCount {
-		m.done <- struct{}{}
-	}
-}
-
-func (m *mockStorage) UpdateNotes(ctx context.Context, notes []interfaces.Message) {
-	m.t.Helper()
-
-	m.wg.Add(1)
-	defer m.wg.Done()
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.updatedNotes = append(m.updatedNotes, notes...)
-
-	if len(m.updatedNotes) == m.expectedCount {
-		m.done <- struct{}{}
-	}
-}
-
-func (m *mockStorage) WaitForSave() {
-	m.wg.Wait()
-}
-
-func (m *mockStorage) GetCreatedNotes() []interfaces.Message {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.createdNotes
-}
-
-func (m *mockStorage) GetUpdatedNotes() []interfaces.Message {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.updatedNotes
-}
-
-func createAndFillBuffer(t *testing.T, bufferSize int, notes []interfaces.Message) *buffer.Buffer {
-	t.Helper()
-
-	buf := buffer.New(bufferSize)
-
-	for _, note := range notes {
-		err := buf.Add(note)
-		require.NoError(t, err)
-	}
-
-	return buf
 }

@@ -17,7 +17,8 @@ type Worker struct {
 		spacesTopic string
 	}
 
-	msgChan chan interfaces.Message
+	createNotesChan chan interfaces.Message
+	updateNotesChan chan interfaces.Message
 
 	// queues
 	notesTopic  amqp.Queue
@@ -38,9 +39,15 @@ func WithAddress(address string) RabbitOption {
 	}
 }
 
-func WithMsgChan(msgCh chan interfaces.Message) RabbitOption {
+func WithCreateNotesChan(createNotesChan chan interfaces.Message) RabbitOption {
 	return func(w *Worker) {
-		w.msgChan = msgCh
+		w.createNotesChan = createNotesChan
+	}
+}
+
+func WithUpdateNotesChan(updateNotesChan chan interfaces.Message) RabbitOption {
+	return func(w *Worker) {
+		w.updateNotesChan = updateNotesChan
 	}
 }
 
@@ -95,8 +102,12 @@ func New(opts ...RabbitOption) (*Worker, error) {
 		return nil, fmt.Errorf("rabbit: spaces topic is required")
 	}
 
-	if w.msgChan == nil {
-		return nil, fmt.Errorf("rabbit: notes message channel is required")
+	if w.createNotesChan == nil {
+		return nil, fmt.Errorf("rabbit: create notes message channel is required")
+	}
+
+	if w.updateNotesChan == nil {
+		return nil, fmt.Errorf("rabbit: update notes message channel is required")
 	}
 
 	return w, nil

@@ -44,14 +44,14 @@ func (s *Repo) CreateTx(ctx context.Context, id string, notes []interfaces.Messa
 	defer stmt.Close()
 
 	for _, note := range notes {
-		model := note.Model().(model.CreateNoteRequest)
+		model := note.Model()
 
 		data, err := json.Marshal(model)
 		if err != nil {
 			return fmt.Errorf("error marshalling model: %w", err)
 		}
 
-		_, err = stmt.ExecContext(ctx, model.RequestID, "notes", data, model.Operation, id)
+		_, err = stmt.ExecContext(ctx, note.GetRequestID(), "notes", data, note.GetOperation(), id)
 		if err != nil {
 			return fmt.Errorf("error saving request: %w", err)
 		}

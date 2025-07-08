@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHandleMessage(t *testing.T) {
+func TestHandleCreateNotes(t *testing.T) {
 	const testTimeout = 1 * time.Second
 
 	notesCount := 100
@@ -27,14 +28,14 @@ func TestHandleMessage(t *testing.T) {
 
 	msgChan := make(chan interfaces.Message, bufferSize)
 	service := &Service{
-		msgChan:       msgChan,
-		createHandler: createHandler,
+		createNotesChan: msgChan,
+		createHandler:   createHandler,
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	go service.handleMessage(ctx)
+	go service.handleCreateNotes(ctx)
 
 	done := make(chan struct{})
 
@@ -61,7 +62,75 @@ func TestHandleMessage(t *testing.T) {
 				return nil
 			})
 
-			msgChan <- message
+			msgChan <- message.Model().(interfaces.Message)
+		}
+	}()
+
+	wg.Wait()
+
+	for {
+		select {
+		case <-done:
+			mu.Lock()
+			assert.Equal(t, notesCount, msgCount)
+			mu.Unlock()
+
+			return
+		case <-time.After(testTimeout):
+			t.Fatal("timeout")
+		}
+	}
+}
+
+func TestHandleUpdateNotes(t *testing.T) {
+	const testTimeout = 1 * time.Second
+
+	notesCount := 100
+	bufferSize := 10
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	updateHandler := mocks.NewMockHandler(ctrl)
+	message := newMessageMock(model.MessageTypeNoteUpdate, model.UpdateOp, notesCount)
+
+	msgChan := make(chan interfaces.Message, bufferSize)
+	service := &Service{
+		updateNotesChan: msgChan,
+		updateHandler:   updateHandler,
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go service.handleUpdateNotes(ctx)
+
+	done := make(chan struct{})
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	// сколько дошло сообщений
+	msgCount := 0
+	mu := sync.Mutex{}
+
+	go func() {
+		defer wg.Done()
+		for range notesCount {
+			updateHandler.EXPECT().Handle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Do(func(ctx context.Context, msg interfaces.Message, shouldSave bool) error {
+				mu.Lock()
+				msgCount++
+
+				if msgCount == notesCount {
+					done <- struct{}{}
+				}
+
+				mu.Unlock()
+
+				return nil
+			})
+
+			msgChan <- message.Model().(interfaces.Message)
 		}
 	}()
 
@@ -110,6 +179,10 @@ func (m *messageMock) Model() any {
 	return m
 }
 
-func (m *messageMock) OperationType() model.Operation {
+func (m *messageMock) GetOperation() model.Operation {
 	return m.operation
+}
+
+func (m *messageMock) GetRequestID() uuid.UUID {
+	return uuid.New()
 }
