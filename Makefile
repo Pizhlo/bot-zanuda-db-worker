@@ -5,18 +5,19 @@ swag:
 	swag init --md ./docs --parseInternal  --parseDependency --parseDepth 2 
 
 lint:
+	@echo "linting..."
 	go vet ./...
 	staticcheck ./...
+	@echo "linting successfully finished"
 
 test:
-	go test -gcflags="-l" -race -v ./...
-
-all:
-	@echo "linting..."
-	make lint
 	@echo "testing..."
-	make test
+	go test -gcflags="-l" -race -v ./...
 	@echo "successfully finished"
+
+all:	
+	make lint
+	make test
 
 run:
 	go run main.go

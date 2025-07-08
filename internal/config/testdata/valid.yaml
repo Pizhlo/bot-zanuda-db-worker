@@ -1,0 +1,22 @@
+
+log_level: "debug"
+instance_id: 1
+
+storage:
+  buffer_size: 100
+
+  postgres:
+    host: "localhost"
+    port: 1111
+    user: "user"
+    password: "password"
+    db_name: "test"    
+    insert_timeout: 5000000
+    read_timeout: 5000000
+  
+  rabbitmq:
+    address: "amqp://user:password@localhost:1234/"
+    note_queue: "notes"
+    space_queue: "spaces"
+    insert_timeout: 5000000
+    read_timeout: 5000000
