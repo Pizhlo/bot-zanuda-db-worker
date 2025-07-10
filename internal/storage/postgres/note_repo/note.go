@@ -13,14 +13,14 @@ import (
 )
 
 func (db *Repo) SaveNotes(ctx context.Context, id string, notes []interfaces.Message) error {
-	logrus.Debugf("postgres: saving notes. id: %s", id)
+	logrus.Debugf("postgres: saving %d note(s). id: %s", len(notes), id)
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(db.insertTimeout)*time.Millisecond)
 	defer cancel()
 
 	tx, err := db.getTx(id)
 	if err != nil {
-		return fmt.Errorf("error on get tx: %w", err)
+		return fmt.Errorf("create notes: error on get tx: %w", err)
 	}
 
 	query := `
@@ -33,7 +33,7 @@ func (db *Repo) SaveNotes(ctx context.Context, id string, notes []interfaces.Mes
 	if err != nil {
 		// rollback вызовется в uow
 
-		return fmt.Errorf("error on prepare statement: %w. ID: %s", err, id)
+		return fmt.Errorf("create notes: error on prepare statement: %w. ID: %s", err, id)
 	}
 	defer stmt.Close()
 
@@ -43,7 +43,7 @@ func (db *Repo) SaveNotes(ctx context.Context, id string, notes []interfaces.Mes
 		note := msg.Model().(model.CreateNoteRequest)
 		err = stmt.QueryRowContext(ctx, note.UserID, note.Text, note.SpaceID).Scan(&id)
 		if err != nil {
-			return fmt.Errorf("error on execute statement: %w. ID: %s", err, id)
+			return fmt.Errorf("create notes: error on execute statement: %w. ID: %s", err, id)
 		}
 
 		note.ID = id
@@ -51,11 +51,46 @@ func (db *Repo) SaveNotes(ctx context.Context, id string, notes []interfaces.Mes
 		notes[i] = note
 	}
 
-	// if err = tx.Commit(); err != nil {
-	// 	return fmt.Errorf("error on commit tx: %w", err)
-	// }
+	logrus.Debugf("postgres: %d note(s) saved. id: %s", len(notes), id)
 
-	logrus.Debugf("postgres: notes saved. id: %s", id)
+	return nil
+}
+
+func (db *Repo) UpdateNotes(ctx context.Context, id string, notes []interfaces.Message) error {
+	logrus.Debugf("postgres: updating %d note(s). id: %s", len(notes), id)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(db.insertTimeout)*time.Millisecond)
+	defer cancel()
+
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("update notes:error on get tx: %w", err)
+	}
+
+	query := `
+		UPDATE notes.notes
+		SET text = $1,
+		updated = extract(epoch from current_timestamp)::BIGINT
+		WHERE id = $2
+	`
+
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		// rollback вызовется в uow
+
+		return fmt.Errorf("update notes: error on prepare statement: %w. ID: %s", err, id)
+	}
+	defer stmt.Close()
+
+	for _, msg := range notes {
+		note := msg.Model().(model.UpdateNoteRequest)
+		_, err = stmt.ExecContext(ctx, note.Text, note.ID)
+		if err != nil {
+			return fmt.Errorf("update notes: error on execute statement: %w. ID: %s", err, id)
+		}
+	}
+
+	logrus.Debugf("postgres: %d note(s) updated. id: %s", len(notes), id)
 
 	return nil
 }

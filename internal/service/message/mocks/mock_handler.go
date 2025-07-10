@@ -11,6 +11,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	uuid "github.com/google/uuid"
 )
 
 // MockHandler is a mock of Handler interface.
@@ -50,43 +51,6 @@ func (mr *MockHandlerMockRecorder) Handle(ctx, msg, shouldSave interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Handle", reflect.TypeOf((*MockHandler)(nil).Handle), ctx, msg, shouldSave)
 }
 
-// MockRequestHandler is a mock of RequestHandler interface.
-type MockRequestHandler struct {
-	ctrl     *gomock.Controller
-	recorder *MockRequestHandlerMockRecorder
-}
-
-// MockRequestHandlerMockRecorder is the mock recorder for MockRequestHandler.
-type MockRequestHandlerMockRecorder struct {
-	mock *MockRequestHandler
-}
-
-// NewMockRequestHandler creates a new mock instance.
-func NewMockRequestHandler(ctrl *gomock.Controller) *MockRequestHandler {
-	mock := &MockRequestHandler{ctrl: ctrl}
-	mock.recorder = &MockRequestHandlerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockRequestHandler) EXPECT() *MockRequestHandlerMockRecorder {
-	return m.recorder
-}
-
-// CreateRequest mocks base method.
-func (m *MockRequestHandler) CreateRequest(ctx context.Context, msg interfaces.Message) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateRequest", ctx, msg)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateRequest indicates an expected call of CreateRequest.
-func (mr *MockRequestHandlerMockRecorder) CreateRequest(ctx, msg interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRequest", reflect.TypeOf((*MockRequestHandler)(nil).CreateRequest), ctx, msg)
-}
-
 // MockMessage is a mock of Message interface.
 type MockMessage struct {
 	ctrl     *gomock.Controller
@@ -108,6 +72,34 @@ func NewMockMessage(ctrl *gomock.Controller) *MockMessage {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockMessage) EXPECT() *MockMessageMockRecorder {
 	return m.recorder
+}
+
+// GetOperation mocks base method.
+func (m *MockMessage) GetOperation() model.Operation {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOperation")
+	ret0, _ := ret[0].(model.Operation)
+	return ret0
+}
+
+// GetOperation indicates an expected call of GetOperation.
+func (mr *MockMessageMockRecorder) GetOperation() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOperation", reflect.TypeOf((*MockMessage)(nil).GetOperation))
+}
+
+// GetRequestID mocks base method.
+func (m *MockMessage) GetRequestID() uuid.UUID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRequestID")
+	ret0, _ := ret[0].(uuid.UUID)
+	return ret0
+}
+
+// GetRequestID indicates an expected call of GetRequestID.
+func (mr *MockMessageMockRecorder) GetRequestID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRequestID", reflect.TypeOf((*MockMessage)(nil).GetRequestID))
 }
 
 // MessageType mocks base method.
@@ -136,18 +128,4 @@ func (m *MockMessage) Model() any {
 func (mr *MockMessageMockRecorder) Model() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Model", reflect.TypeOf((*MockMessage)(nil).Model))
-}
-
-// OperationType mocks base method.
-func (m *MockMessage) OperationType() model.Operation {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OperationType")
-	ret0, _ := ret[0].(model.Operation)
-	return ret0
-}
-
-// OperationType indicates an expected call of OperationType.
-func (mr *MockMessageMockRecorder) OperationType() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperationType", reflect.TypeOf((*MockMessage)(nil).OperationType))
 }

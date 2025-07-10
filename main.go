@@ -36,7 +36,7 @@ func main() {
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		app.NoteStorage.Close()
+		app.NoteCreator.Close()
 		app.TxSaver.Close()
 
 		err = app.Rabbit.Close()

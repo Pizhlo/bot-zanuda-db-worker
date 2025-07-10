@@ -15,50 +15,65 @@ func TestNew(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	createHandler := mocks.NewMockHandler(ctrl)
-	msgChan := make(chan interfaces.Message)
+	createNotesHandler := mocks.NewMockHandler(ctrl)
+	createNotesChan := make(chan interfaces.Message)
+	updateNotesChan := make(chan interfaces.Message)
+	updateNotesHandler := mocks.NewMockHandler(ctrl)
 
 	tests := []struct {
 		name            string
 		opts            []ServiceOption
 		expectedService *Service
-		wantErr         bool
 		err             error
 	}{
 		{
 			name: "positive case",
 			opts: []ServiceOption{
-				WithMsgChan(msgChan),
-				WithCreateHandler(createHandler),
+				WithCreateNotesChan(createNotesChan),
+				WithCreateHandler(createNotesHandler),
+				WithUpdateNotesChan(updateNotesChan),
+				WithUpdateHandler(updateNotesHandler),
 			},
 			expectedService: &Service{
-				msgChan:       msgChan,
-				createHandler: createHandler,
+				createNotesChan: createNotesChan,
+				createHandler:   createNotesHandler,
+				updateNotesChan: updateNotesChan,
+				updateHandler:   updateNotesHandler,
 			},
-			wantErr: false,
 		},
 		{
-			name: "negative case: msgChan is nil",
+			name: "negative case: createNotesChan is nil",
 			opts: []ServiceOption{
-				WithCreateHandler(createHandler),
+				WithCreateHandler(createNotesHandler),
+				WithUpdateNotesChan(updateNotesChan),
+				WithUpdateHandler(updateNotesHandler),
 			},
-			wantErr: true,
-			err:     errors.New("message channel is required"),
+			err: errors.New("create notes channel is required"),
 		},
 		{
-			name: "negative case: txHandler is nil",
+			name: "negative case: createHandler is nil",
 			opts: []ServiceOption{
-				WithMsgChan(msgChan),
+				WithCreateNotesChan(createNotesChan),
+				WithUpdateNotesChan(updateNotesChan),
+				WithUpdateHandler(updateNotesHandler),
 			},
-			wantErr: true,
-			err:     errors.New("create handler is required"),
+			err: errors.New("create handler is required"),
+		},
+		{
+			name: "negative case: updateNotesChan is nil",
+			opts: []ServiceOption{
+				WithCreateNotesChan(createNotesChan),
+				WithCreateHandler(createNotesHandler),
+				WithUpdateHandler(updateNotesHandler),
+			},
+			err: errors.New("update notes channel is required"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service, err := New(tt.opts...)
-			if tt.wantErr {
+			if tt.err != nil {
 				require.Error(t, err)
 				require.EqualError(t, tt.err, err.Error())
 				assert.Nil(t, service)
