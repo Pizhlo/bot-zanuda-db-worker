@@ -16,10 +16,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	configPath := flag.String("config", "internal/config/config.yaml", "путь к файлу конфигурации")
+	configPath := flag.String("config", "internal/config/config.yaml", "path to config file")
+	modelConfigPath := flag.String("model-config", "internal/config/model.yaml", "path to model config file")
 	flag.Parse()
 
-	app, err := app.NewApp(ctx, *configPath)
+	app, err := app.NewApp(ctx, *configPath, *modelConfigPath)
 	if err != nil {
 		logrus.Fatalf("error creating app: %+v", err)
 	}
@@ -36,8 +37,8 @@ func main() {
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		app.NoteCreator.Close()
-		app.TxSaver.Close()
+		// app.NoteCreator.Close()
+		// app.TxSaver.Close()
 
 		err = app.Rabbit.Close()
 		if err != nil {

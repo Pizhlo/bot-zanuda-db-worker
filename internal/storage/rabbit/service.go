@@ -20,6 +20,8 @@ type Worker struct {
 	createNotesChan chan interfaces.Message
 	updateNotesChan chan interfaces.Message
 
+	dataChan chan map[string]interface{}
+
 	// queues
 	notesTopic  amqp.Queue
 	spacesTopic amqp.Queue
@@ -75,6 +77,12 @@ func WithReadTimeout(readTimeout int) RabbitOption {
 	}
 }
 
+func WithDataChan(dataChan chan map[string]interface{}) RabbitOption {
+	return func(w *Worker) {
+		w.dataChan = dataChan
+	}
+}
+
 func New(opts ...RabbitOption) (*Worker, error) {
 	w := &Worker{}
 
@@ -108,6 +116,10 @@ func New(opts ...RabbitOption) (*Worker, error) {
 
 	if w.updateNotesChan == nil {
 		return nil, fmt.Errorf("rabbit: update notes message channel is required")
+	}
+
+	if w.dataChan == nil {
+		return nil, fmt.Errorf("rabbit: data channel is required")
 	}
 
 	return w, nil

@@ -87,3 +87,41 @@ func (s *Worker) HandleNotes(ctx context.Context) {
 		}
 	}
 }
+
+func (s *Worker) TestHandle(ctx context.Context) {
+	logrus.Debugf("rabbit: start handle message")
+
+	msgs, err := s.channel.Consume(
+		s.notesTopic.Name, // queue
+		"",                // consumer
+		true,              // auto-ack
+		false,             // exclusive
+		false,             // no-local
+		false,             // no-wait
+		nil,               // args
+	)
+	if err != nil {
+		logrus.Errorf("rabbit: error consume message: %+v", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-msgs:
+			logrus.Debugf("rabbit: received message: %s", string(msg.Body))
+
+			var data map[string]interface{}
+			err = json.Unmarshal(msg.Body, &data)
+			if err != nil {
+				logrus.Errorf("rabbit: error unmarshal message: %+v", err)
+
+				continue
+			}
+
+			data["model_name"] = "note"
+
+			s.dataChan <- data
+		}
+	}
+}

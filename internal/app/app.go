@@ -6,6 +6,7 @@ import (
 	message "db-worker/internal/service/message"
 	handler "db-worker/internal/service/message/handler"
 	interfaces "db-worker/internal/service/message/interface"
+	"db-worker/internal/service/model"
 	postgres "db-worker/internal/storage/postgres/note_repo"
 	"db-worker/internal/storage/postgres/transaction"
 	"db-worker/internal/storage/rabbit"
@@ -25,38 +26,54 @@ type App struct {
 	TxSaver     *transaction.Repo
 }
 
-func NewApp(ctx context.Context, configPath string) (*App, error) {
+func NewApp(ctx context.Context, configPath string, modelConfigPath string) (*App, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("error loading config: %w", err)
+	}
+
+	modelConfig, err := config.LoadModelConfig(modelConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading model config: %w", err)
 	}
 
 	setLogLevel(cfg.LogLevel)
 
 	createNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
 	updateNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
+	dataChan := make(chan map[string]interface{}, cfg.Storage.BufferSize)
+	// txSaver := initTxSaver(cfg)
 
-	txSaver := initTxSaver(cfg)
+	// noteRepo := initNoteStorage(cfg)
 
-	noteRepo := initNoteStorage(cfg)
+	// uowCreateNote := initNoteCreator(txSaver, noteRepo)
+	// uowUpdateNote := initNoteUpdater(txSaver, noteRepo)
 
-	uowCreateNote := initNoteCreator(txSaver, noteRepo)
-	uowUpdateNote := initNoteUpdater(txSaver, noteRepo)
+	// createNoteHandler := initCreateNoteHandler(uowCreateNote, cfg.Storage.BufferSize)
+	// updateNoteHandler := initUpdateNoteHandler(uowUpdateNote, cfg.Storage.BufferSize)
 
-	createNoteHandler := initCreateNoteHandler(uowCreateNote, cfg.Storage.BufferSize)
-	updateNoteHandler := initUpdateNoteHandler(uowUpdateNote, cfg.Storage.BufferSize)
+	rabbit := initRabbit(ctx, cfg, createNotesChan, updateNotesChan, dataChan)
 
-	rabbit := initRabbit(ctx, cfg, createNotesChan, updateNotesChan)
+	modelService := initModelService(modelConfig, dataChan)
 
-	noteSrv := initNoteSrv(ctx, createNoteHandler, updateNoteHandler, createNotesChan, updateNotesChan)
+	go modelService.Run(ctx)
+
+	// noteSrv := initNoteSrv(ctx, createNoteHandler, updateNoteHandler, createNotesChan, updateNotesChan)
 
 	return &App{
-		Cfg:         cfg,
-		NoteSrv:     noteSrv,
-		NoteCreator: uowCreateNote,
-		Rabbit:      rabbit,
-		TxSaver:     txSaver,
+		Cfg: cfg,
+		// NoteSrv:     noteSrv,
+		// NoteCreator: uowCreateNote,
+		Rabbit: rabbit,
+		// TxSaver:     txSaver,
 	}, nil
+}
+
+func initModelService(modelConfig *config.ModelConfig, dataChan chan map[string]interface{}) *model.Service {
+	return start(model.New(
+		model.WithModelConfig(modelConfig),
+		model.WithMessageChan(dataChan),
+	))
 }
 
 func initTxSaver(cfg *config.Config) *transaction.Repo {
@@ -102,7 +119,7 @@ func setLogLevel(level string) {
 	logrus.Infof("log level: %+v", logrus.GetLevel())
 }
 
-func initRabbit(ctx context.Context, cfg *config.Config, createNotesChan chan interfaces.Message, updateNotesChan chan interfaces.Message) *rabbit.Worker {
+func initRabbit(ctx context.Context, cfg *config.Config, createNotesChan chan interfaces.Message, updateNotesChan chan interfaces.Message, dataChan chan map[string]interface{}) *rabbit.Worker {
 	logrus.Infof("connecting rabbit on %s", cfg.Storage.RabbitMQ.Address)
 
 	rabbit := start(rabbit.New(
@@ -113,11 +130,13 @@ func initRabbit(ctx context.Context, cfg *config.Config, createNotesChan chan in
 		rabbit.WithUpdateNotesChan(updateNotesChan),
 		rabbit.WithInsertTimeout(cfg.Storage.RabbitMQ.InsertTimeout),
 		rabbit.WithReadTimeout(cfg.Storage.RabbitMQ.ReadTimeout),
+		rabbit.WithDataChan(dataChan),
 	))
 
 	startService(rabbit.Connect(), "rabbit")
 
-	go rabbit.HandleNotes(ctx)
+	// go rabbit.HandleNotes(ctx)
+	go rabbit.TestHandle(ctx)
 
 	logrus.Infof("successfully connected rabbit on %s", cfg.Storage.RabbitMQ.Address)
 
