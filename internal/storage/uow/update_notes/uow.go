@@ -33,18 +33,13 @@ type transactionRepo interface {
 	SaveResult(ctx context.Context, id string, result model.Result) error
 }
 
-// StorageRepositories содержит все необходимые репозитории.
-type StorageRepositories struct {
-	TxRepo   transactionRepo
-	Postgres noteRepo
-}
-
 // UnitOfWork реализует интерфейс UnitOfWork.
 type UnitOfWork struct {
 	mu sync.Mutex
 
 	Repos struct {
-		StorageRepositories
+		TxRepo   transactionRepo
+		Postgres noteRepo
 	}
 
 	transactions map[string]struct{}
