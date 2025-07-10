@@ -40,8 +40,8 @@ func NewApp(ctx context.Context, configPath string) (*App, error) {
 
 	noteRepo := initNoteStorage(cfg)
 
-	uowCreateNote := initNoteCreator(cfg, txSaver, noteRepo)
-	uowUpdateNote := initNoteUpdater(cfg, txSaver, noteRepo)
+	uowCreateNote := initNoteCreator(txSaver, noteRepo)
+	uowUpdateNote := initNoteUpdater(txSaver, noteRepo)
 
 	createNoteHandler := initCreateNoteHandler(uowCreateNote, cfg.Storage.BufferSize)
 	updateNoteHandler := initUpdateNoteHandler(uowUpdateNote, cfg.Storage.BufferSize)
@@ -148,15 +148,11 @@ func initNoteStorage(cfg *config.Config) *postgres.Repo {
 	))
 }
 
-func initNoteCreator(cfg *config.Config, txSaver *transaction.Repo, noteStorage *postgres.Repo) *create_notes.UnitOfWork {
+func initNoteCreator(txSaver *transaction.Repo, noteStorage *postgres.Repo) *create_notes.UnitOfWork {
 	return start(create_notes.NewUnitOfWork(create_notes.WithPostgres(noteStorage), create_notes.WithTxRepo(txSaver)))
 }
 
-func initNoteUpdater(cfg *config.Config, txSaver *transaction.Repo, noteStorage *postgres.Repo) *update_notes.UnitOfWork {
-	addr := formatPostgresAddr(cfg)
-
-	logrus.Infof("connecting db on %s", addr)
-
+func initNoteUpdater(txSaver *transaction.Repo, noteStorage *postgres.Repo) *update_notes.UnitOfWork {
 	return start(update_notes.NewUnitOfWork(update_notes.WithPostgres(noteStorage), update_notes.WithTxRepo(txSaver)))
 }
 
