@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"db-worker/internal/config"
+	model_config "db-worker/internal/config/model"
 	message "db-worker/internal/service/message"
 	handler "db-worker/internal/service/message/handler"
 	interfaces "db-worker/internal/service/message/interface"
@@ -25,17 +26,22 @@ type App struct {
 	TxSaver     *transaction.Repo
 }
 
-func NewApp(ctx context.Context, configPath string) (*App, error) {
+func NewApp(ctx context.Context, configPath string, modelConfigPath string) (*App, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("error loading config: %w", err)
 	}
 
+	// Устанавливаем уровень логирования сразу после загрузки основного конфига
 	setLogLevel(cfg.LogLevel)
+
+	_, err = model_config.LoadModelConfig(modelConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading model config: %w", err)
+	}
 
 	createNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
 	updateNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
-
 	txSaver := initTxSaver(cfg)
 
 	noteRepo := initNoteStorage(cfg)
@@ -54,6 +60,7 @@ func NewApp(ctx context.Context, configPath string) (*App, error) {
 		Cfg:         cfg,
 		NoteSrv:     noteSrv,
 		NoteCreator: uowCreateNote,
+		NoteUpdater: uowUpdateNote,
 		Rabbit:      rabbit,
 		TxSaver:     txSaver,
 	}, nil
