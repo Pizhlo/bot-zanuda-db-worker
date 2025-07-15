@@ -8,8 +8,10 @@ import (
 
 // RequestConfig представляет конфигурацию запроса
 type RequestConfig struct {
-	From   string      `yaml:"from" validate:"required,oneof=rabbitmq http"`
-	Config interface{} `yaml:"config" validate:"required"`
+	From           string         `yaml:"from" validate:"required,validateConnection"` // имя соединения, из которого будет получен запрос
+	Config         map[string]any `yaml:"config" validate:"required"`
+	Connection     Connection
+	RequestHandler RequestHandler
 }
 
 // RabbitMQRequest представляет конфигурацию RabbitMQ запроса
@@ -18,6 +20,12 @@ type RabbitMQRequest struct {
 	Address    string                 `yaml:"address" validate:"required,rabbitmq_address"`
 	RoutingKey string                 `yaml:"routing_key" validate:"required"`
 	Message    map[string]interface{} `yaml:"message" validate:"required"`
+}
+
+type Connection struct {
+	Name    string `yaml:"name" validate:"required"`
+	Type    string `yaml:"type" validate:"required,oneof=rabbitmq http"`
+	Address string `yaml:"address" validate:"required"`
 }
 
 // HTTPRequest представляет конфигурацию HTTP запроса
@@ -30,33 +38,42 @@ type HTTPRequest struct {
 type RequestHandler interface {
 	GetType() string
 	Validate() error
+	GetAddress() string
+	GetTopic() string
+}
+
+func (r *RequestConfig) SetConnection(connection Connection) {
+	r.Connection = connection
 }
 
 func (r *RequestConfig) Validate() error {
-	if r.From == RabbitMQRequestType {
-		var v RabbitMQRequest
-		if err := r.unmarshalConfig(&v); err != nil {
+	if r.Connection.Type == "" {
+		return fmt.Errorf("connection type is required")
+	}
+
+	switch r.Connection.Type {
+	case RabbitMQRequestType:
+		var config RabbitMQRequest
+		if err := r.unmarshalConfig(&config); err != nil {
 			return fmt.Errorf("invalid rabbitmq config: %w", err)
 		}
 
-		return v.Validate()
-	}
-
-	if r.From == HTTPRequestType {
-		var v HTTPRequest
-		if err := r.unmarshalConfig(&v); err != nil {
+		return config.Validate()
+	case HTTPRequestType:
+		var config HTTPRequest
+		if err := r.unmarshalConfig(&config); err != nil {
 			return fmt.Errorf("invalid http config: %w", err)
 		}
 
-		return v.Validate()
+		return config.Validate()
 	}
 
-	return fmt.Errorf("invalid request type: %s", r.From)
+	return fmt.Errorf("unknown request type: %s", r.Connection.Type)
 }
 
 // GetRequestHandler возвращает обработчик запроса на основе типа
 func (r *RequestConfig) GetRequestHandler() (RequestHandler, error) {
-	switch r.From {
+	switch r.Connection.Type {
 	case RabbitMQRequestType:
 		var config RabbitMQRequest
 		if err := r.unmarshalConfig(&config); err != nil {
@@ -70,7 +87,7 @@ func (r *RequestConfig) GetRequestHandler() (RequestHandler, error) {
 		}
 		return &config, nil
 	default:
-		return nil, fmt.Errorf("unsupported request type: %s", r.From)
+		return nil, fmt.Errorf("unsupported request type: %s", r.Connection.Type)
 	}
 }
 
@@ -96,14 +113,20 @@ func (r *RabbitMQRequest) GetType() string {
 	return RabbitMQRequestType
 }
 
+// GetAddress возвращает адрес RabbitMQ запроса
+func (r *RabbitMQRequest) GetAddress() string {
+	return r.Address
+}
+
+// GetTopic возвращает топик RabbitMQ запроса
+func (r *RabbitMQRequest) GetTopic() string {
+	return r.Queue
+}
+
 // Validate валидирует RabbitMQ конфигурацию
 func (r *RabbitMQRequest) Validate() error {
 	if r.Queue == "" {
 		return fmt.Errorf("queue is required for rabbitmq request")
-	}
-
-	if r.RoutingKey == "" {
-		return fmt.Errorf("routing_key is required for rabbitmq request")
 	}
 
 	if len(r.Message) == 0 {
@@ -155,6 +178,11 @@ func (r *HTTPRequest) GetType() string {
 	return HTTPRequestType
 }
 
+// GetAddress возвращает адрес HTTP запроса
+func (r *HTTPRequest) GetAddress() string {
+	return r.URL
+}
+
 // Validate валидирует HTTP конфигурацию
 func (r *HTTPRequest) Validate() error {
 	if r.URL == "" {
@@ -164,4 +192,9 @@ func (r *HTTPRequest) Validate() error {
 	// пока что нет валидации для HTTP запроса
 
 	return nil
+}
+
+// GetTopic возвращает топик HTTP запроса
+func (r *HTTPRequest) GetTopic() string {
+	return ""
 }

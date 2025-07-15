@@ -21,7 +21,7 @@ import (
 func TestNewCreateNoteHandler(t *testing.T) {
 	type testCase struct {
 		name string
-		opts []createNoteHandlerOption
+		opts []createHandlerOption
 		want error
 	}
 
@@ -33,8 +33,8 @@ func TestNewCreateNoteHandler(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "success",
-			opts: []createNoteHandlerOption{
-				WithBufferSizeCreateNoteHandler(10),
+			opts: []createHandlerOption{
+				WithBufferSizeCreateHandler(10),
 				WithNotesCreator(mockNotesStorage),
 			},
 			want: nil,
@@ -42,15 +42,15 @@ func TestNewCreateNoteHandler(t *testing.T) {
 
 		{
 			name: "without buffer size",
-			opts: []createNoteHandlerOption{
+			opts: []createHandlerOption{
 				WithNotesCreator(mockNotesStorage),
 			},
 			want: errors.New("buffer size is 0"),
 		},
 		{
 			name: "without notes storage",
-			opts: []createNoteHandlerOption{
-				WithBufferSizeCreateNoteHandler(10),
+			opts: []createHandlerOption{
+				WithBufferSizeCreateHandler(10),
 			},
 			want: errors.New("notes storage is nil"),
 		},
@@ -58,7 +58,7 @@ func TestNewCreateNoteHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, err := NewCreateNoteHandler(tt.opts...)
+			handler, err := NewCreateHandler(tt.opts...)
 			if tt.want != nil {
 				require.EqualError(t, err, tt.want.Error())
 				assert.Nil(t, handler)
@@ -125,7 +125,7 @@ func TestHandleCreateNote(t *testing.T) {
 				done:          done,
 			}
 
-			handler, err := NewCreateNoteHandler(WithBufferSizeCreateNoteHandler(10), WithNotesCreator(storage))
+			handler, err := NewCreateHandler(WithBufferSizeCreateHandler(10), WithNotesCreator(storage))
 			require.NoError(t, err)
 
 			handler.buffer = tt.buffer

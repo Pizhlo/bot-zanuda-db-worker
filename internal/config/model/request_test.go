@@ -17,11 +17,13 @@ func TestRequestConfig_Validate(t *testing.T) {
 		{
 			name: "valid rabbitmq config",
 			config: RequestConfig{
-				From: "rabbitmq",
-				Config: RabbitMQRequest{
-					Queue:      "test_queue",
-					RoutingKey: "test_key",
-					Message: map[string]interface{}{
+				Connection: Connection{
+					Type: "rabbitmq",
+				},
+				Config: map[string]any{
+					"queue":       "test_queue",
+					"routing_key": "test_key",
+					"message": map[string]interface{}{
 						"operation": map[any]any{
 							"type":     fieldTypeString,
 							"required": true,
@@ -35,11 +37,13 @@ func TestRequestConfig_Validate(t *testing.T) {
 		{
 			name: "invalid rabbitmq config",
 			config: RequestConfig{
-				From: "rabbitmq",
-				Config: RabbitMQRequest{
-					Queue:      "test_queue",
-					RoutingKey: "test_key",
-					Message: map[string]interface{}{
+				Connection: Connection{
+					Type: "rabbitmq",
+				},
+				Config: map[string]any{
+					"queue":       "test_queue",
+					"routing_key": "test_key",
+					"message": map[string]interface{}{
 						"operation": OperationTypeCreate,
 					},
 				},
@@ -49,10 +53,12 @@ func TestRequestConfig_Validate(t *testing.T) {
 		{
 			name: "valid http config",
 			config: RequestConfig{
-				From: "http",
-				Config: HTTPRequest{
-					URL: "https://api.example.com/notes",
-					Body: map[string]interface{}{
+				Connection: Connection{
+					Type: "http",
+				},
+				Config: map[string]any{
+					"url": "https://api.example.com/notes",
+					"body": map[string]interface{}{
 						"operation": map[any]any{
 							"type":     fieldTypeString,
 							"required": true,
@@ -66,9 +72,11 @@ func TestRequestConfig_Validate(t *testing.T) {
 		{
 			name: "invalid http config",
 			config: RequestConfig{
-				From: "http",
-				Config: HTTPRequest{
-					Body: map[string]interface{}{
+				Connection: Connection{
+					Type: "http",
+				},
+				Config: map[string]any{
+					"body": map[string]interface{}{
 						"operation": OperationTypeCreate,
 					},
 				},
@@ -96,9 +104,10 @@ func TestRequestConfig_Validate(t *testing.T) {
 
 func TestGetRequestHandler(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  RequestConfig
-		wantErr bool
+		name        string
+		config      RequestConfig
+		wantErr     require.ErrorAssertionFunc
+		wantHandler RequestHandler
 	}{
 		{
 			name: "valid rabbitmq config",
@@ -111,8 +120,18 @@ func TestGetRequestHandler(t *testing.T) {
 						"operation": OperationTypeCreate,
 					},
 				},
+				Connection: Connection{
+					Type: "rabbitmq",
+				},
 			},
-			wantErr: false,
+			wantErr: require.NoError,
+			wantHandler: &RabbitMQRequest{
+				Queue:      "test_queue",
+				RoutingKey: "test_key",
+				Message: map[string]interface{}{
+					"operation": OperationTypeCreate,
+				},
+			},
 		},
 		{
 			name: "valid http config",
@@ -124,29 +143,43 @@ func TestGetRequestHandler(t *testing.T) {
 						"operation": OperationTypeCreate,
 					},
 				},
+				Connection: Connection{
+					Type: "http",
+				},
 			},
-			wantErr: false,
+			wantErr: require.NoError,
+			wantHandler: &HTTPRequest{
+				URL: "https://api.example.com/notes",
+				Body: map[string]interface{}{
+					"operation": OperationTypeCreate,
+				},
+			},
 		},
 		{
 			name: "invalid request type",
 			config: RequestConfig{
 				From:   "invalid",
 				Config: map[string]interface{}{},
+				Connection: Connection{
+					Type: "invalid",
+				},
 			},
-			wantErr: true,
+			wantErr: require.Error,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			handler, err := tt.config.GetRequestHandler()
-			if tt.wantErr {
-				require.Error(t, err)
-				return
+			tt.wantErr(t, err)
+
+			require.Equal(t, tt.wantHandler, handler)
+
+			if tt.wantHandler != nil {
+				require.Equal(t, tt.config.From, handler.GetType())
 			}
-			require.NoError(t, err)
-			require.NotNil(t, handler)
-			require.Equal(t, tt.config.From, handler.GetType())
 		})
 	}
 }
@@ -374,4 +407,34 @@ func TestHTTPRequest_GetType(t *testing.T) {
 	request := HTTPRequest{}
 
 	require.Equal(t, HTTPRequestType, request.GetType())
+}
+
+func TestRabbitMQRequest_GetTopic(t *testing.T) {
+	request := RabbitMQRequest{
+		Queue: "test_queue",
+	}
+
+	require.Equal(t, "test_queue", request.GetTopic())
+}
+
+func TestRabbitMQRequest_GetAddress(t *testing.T) {
+	request := RabbitMQRequest{
+		Address: "test_address",
+	}
+
+	require.Equal(t, "test_address", request.GetAddress())
+}
+
+func TestHTTPRequest_GetAddress(t *testing.T) {
+	request := HTTPRequest{
+		URL: "https://api.example.com/notes",
+	}
+
+	require.Equal(t, "https://api.example.com/notes", request.GetAddress())
+}
+
+func TestHTTPRequest_GetTopic(t *testing.T) {
+	request := HTTPRequest{}
+
+	require.Equal(t, "", request.GetTopic())
 }

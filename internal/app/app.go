@@ -19,11 +19,13 @@ import (
 
 type App struct {
 	Cfg         *config.Config
-	NoteSrv     *message.Service
-	NoteCreator *create_notes.UnitOfWork
-	NoteUpdater *update_notes.UnitOfWork
-	Rabbit      *rabbit.Worker
+	MsgService  *message.Service
 	TxSaver     *transaction.Repo
+	Connections []connection
+}
+
+type connection interface {
+	Close()
 }
 
 func NewApp(ctx context.Context, configPath string, modelConfigPath string) (*App, error) {
@@ -35,35 +37,66 @@ func NewApp(ctx context.Context, configPath string, modelConfigPath string) (*Ap
 	// Устанавливаем уровень логирования сразу после загрузки основного конфига
 	setLogLevel(cfg.LogLevel)
 
-	_, err = model_config.LoadModelConfig(modelConfigPath)
+	modelCfg, err := model_config.LoadModelConfig(modelConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("error loading model config: %w", err)
 	}
 
-	createNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
-	updateNotesChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
 	txSaver := initTxSaver(cfg)
 
-	noteRepo := initNoteStorage(cfg)
-
-	uowCreateNote := initNoteCreator(txSaver, noteRepo)
-	uowUpdateNote := initNoteUpdater(txSaver, noteRepo)
-
-	createNoteHandler := initCreateNoteHandler(uowCreateNote, cfg.Storage.BufferSize)
-	updateNoteHandler := initUpdateNoteHandler(uowUpdateNote, cfg.Storage.BufferSize)
-
-	rabbit := initRabbit(ctx, cfg, createNotesChan, updateNotesChan)
-
-	noteSrv := initNoteSrv(ctx, createNoteHandler, updateNoteHandler, createNotesChan, updateNotesChan)
-
-	return &App{
+	app := &App{
 		Cfg:         cfg,
-		NoteSrv:     noteSrv,
-		NoteCreator: uowCreateNote,
-		NoteUpdater: uowUpdateNote,
-		Rabbit:      rabbit,
 		TxSaver:     txSaver,
-	}, nil
+		Connections: make([]connection, 0),
+	}
+
+	storage := initStorage(cfg)
+
+	createStorage := initNoteCreator(txSaver, storage)
+	updateStorage := initNoteUpdater(txSaver, storage)
+
+	createChannels := make([]chan interfaces.Message, 0)
+	updateChannels := make([]chan interfaces.Message, 0)
+	createHandler := initCreateNoteHandler(createStorage, cfg.Storage.BufferSize)
+	updateHandler := initUpdateNoteHandler(updateStorage, cfg.Storage.BufferSize)
+
+	for _, model := range modelCfg.Models {
+		for _, operation := range model.Operations {
+			switch operation.Request.Connection.Type {
+			case model_config.RabbitMQRequestType:
+				handler, err := operation.Request.GetRequestHandler()
+				if err != nil {
+					return nil, fmt.Errorf("error getting request handler: %w", err)
+				}
+
+				msgChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
+
+				app.Connections = append(app.Connections,
+					initRabbit(ctx, operation.Request.Connection.Address, handler.GetTopic(), cfg.Storage.RabbitMQ.InsertTimeout, cfg.Storage.RabbitMQ.ReadTimeout, msgChan, operation.Fields, operation.Type))
+
+				saveChannel(msgChan, &createChannels, &updateChannels, operation.Type)
+			case model_config.HTTPRequestType:
+				logrus.Warnf("http request is not supported yet")
+			default:
+				return nil, fmt.Errorf("unknown request type: %s", operation.Request.Connection.Type)
+			}
+
+		}
+	}
+
+	messageSrv := initMessageSrv(ctx, createHandler, updateHandler, createChannels, updateChannels)
+
+	app.MsgService = messageSrv
+
+	return app, nil
+}
+
+func saveChannel(ch chan interfaces.Message, createChannels *[]chan interfaces.Message, updateChannels *[]chan interfaces.Message, operation string) {
+	if operation == model_config.OperationTypeCreate {
+		*createChannels = append(*createChannels, ch)
+	} else {
+		*updateChannels = append(*updateChannels, ch)
+	}
 }
 
 func initTxSaver(cfg *config.Config) *transaction.Repo {
@@ -79,11 +112,11 @@ func initTxSaver(cfg *config.Config) *transaction.Repo {
 }
 
 func initCreateNoteHandler(storage *create_notes.UnitOfWork, bufferSize int) interfaces.Handler {
-	return start(handler.NewCreateNoteHandler(handler.WithNotesCreator(storage), handler.WithBufferSizeCreateNoteHandler(bufferSize)))
+	return start(handler.NewCreateHandler(handler.WithNotesCreator(storage), handler.WithBufferSizeCreateHandler(bufferSize)))
 }
 
 func initUpdateNoteHandler(storage *update_notes.UnitOfWork, bufferSize int) interfaces.Handler {
-	return start(handler.NewUpdateNoteHandler(handler.WithNotesUpdater(storage), handler.WithBufferSizeUpdateNoteHandler(bufferSize)))
+	return start(handler.NewUpdateHandler(handler.WithNotesUpdater(storage), handler.WithBufferSizeUpdateHandler(bufferSize)))
 }
 
 func setLogLevel(level string) {
@@ -109,42 +142,41 @@ func setLogLevel(level string) {
 	logrus.Infof("log level: %+v", logrus.GetLevel())
 }
 
-func initRabbit(ctx context.Context, cfg *config.Config, createNotesChan chan interfaces.Message, updateNotesChan chan interfaces.Message) *rabbit.Worker {
-	logrus.Infof("connecting rabbit on %s", cfg.Storage.RabbitMQ.Address)
+func initRabbit(ctx context.Context, addr string, topic string, insertTimeout int, readTimeout int, msgChan chan interfaces.Message, fields map[string]model_config.Field, operation string) *rabbit.Worker {
+	logrus.Infof("connecting rabbit on %s", addr)
 
 	rabbit := start(rabbit.New(
-		rabbit.WithAddress(cfg.Storage.RabbitMQ.Address),
-		rabbit.WithNotesTopic(cfg.Storage.RabbitMQ.NoteQueue),
-		rabbit.WithSpacesTopic(cfg.Storage.RabbitMQ.SpaceQueue),
-		rabbit.WithCreateNotesChan(createNotesChan),
-		rabbit.WithUpdateNotesChan(updateNotesChan),
-		rabbit.WithInsertTimeout(cfg.Storage.RabbitMQ.InsertTimeout),
-		rabbit.WithReadTimeout(cfg.Storage.RabbitMQ.ReadTimeout),
+		rabbit.WithAddress(addr),
+		rabbit.WithMsgChan(msgChan),
+		rabbit.WithInsertTimeout(insertTimeout),
+		rabbit.WithReadTimeout(readTimeout),
+		rabbit.WithFields(fields),
+		rabbit.WithOperation(operation),
 	))
 
-	startService(rabbit.Connect(), "rabbit")
+	startService(rabbit.Connect(topic), "rabbit")
 
-	go rabbit.HandleNotes(ctx)
+	go rabbit.HandleTopic(ctx)
 
-	logrus.Infof("successfully connected rabbit on %s", cfg.Storage.RabbitMQ.Address)
+	logrus.Infof("successfully connected rabbit on %s", addr)
 
 	return rabbit
 }
 
-func initNoteSrv(ctx context.Context, createNoteHandler interfaces.Handler, updateNoteHandler interfaces.Handler, createNotesChan chan interfaces.Message, updateNotesChan chan interfaces.Message) *message.Service {
-	noteSrv := start(message.New(
-		message.WithCreateNotesChan(createNotesChan),
-		message.WithUpdateNotesChan(updateNotesChan),
-		message.WithCreateHandler(createNoteHandler),
-		message.WithUpdateHandler(updateNoteHandler),
+func initMessageSrv(ctx context.Context, createHandler interfaces.Handler, updateHandler interfaces.Handler, createChannels []chan interfaces.Message, updateChannels []chan interfaces.Message) *message.Service {
+	messageSrv := start(message.New(
+		message.WithCreateChannels(createChannels),
+		message.WithUpdateChannels(updateChannels),
+		message.WithCreateHandler(createHandler),
+		message.WithUpdateHandler(updateHandler),
 	))
 
-	go noteSrv.Run(ctx)
+	go messageSrv.Run(ctx)
 
-	return noteSrv
+	return messageSrv
 }
 
-func initNoteStorage(cfg *config.Config) *postgres.Repo {
+func initStorage(cfg *config.Config) *postgres.Repo {
 	addr := formatPostgresAddr(cfg)
 
 	logrus.Infof("connecting db on %s", addr)

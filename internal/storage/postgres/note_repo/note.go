@@ -37,6 +37,8 @@ func (db *Repo) SaveNotes(ctx context.Context, id string, notes []interfaces.Mes
 	}
 	defer stmt.Close()
 
+	// TODO: доделать формирование запроса
+
 	for i, msg := range notes {
 		id := uuid.UUID{}
 

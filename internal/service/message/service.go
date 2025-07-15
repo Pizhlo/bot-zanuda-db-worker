@@ -11,8 +11,8 @@ import (
 
 // сервис для работы с сообщениями
 type Service struct {
-	createNotesChan chan interfaces.Message
-	updateNotesChan chan interfaces.Message
+	createChannels []chan interfaces.Message
+	updateChannels []chan interfaces.Message
 
 	createHandler interfaces.Handler
 	updateHandler interfaces.Handler
@@ -20,15 +20,15 @@ type Service struct {
 
 type ServiceOption func(*Service)
 
-func WithCreateNotesChan(createNotesChan chan interfaces.Message) ServiceOption {
+func WithCreateChannels(createChannels []chan interfaces.Message) ServiceOption {
 	return func(s *Service) {
-		s.createNotesChan = createNotesChan
+		s.createChannels = createChannels
 	}
 }
 
-func WithUpdateNotesChan(updateNotesChan chan interfaces.Message) ServiceOption {
+func WithUpdateChannels(updateChannels []chan interfaces.Message) ServiceOption {
 	return func(s *Service) {
-		s.updateNotesChan = updateNotesChan
+		s.updateChannels = updateChannels
 	}
 }
 
@@ -50,12 +50,12 @@ func New(opts ...ServiceOption) (*Service, error) {
 		opt(s)
 	}
 
-	if s.createNotesChan == nil {
-		return nil, errors.New("create notes channel is required")
+	if s.createChannels == nil {
+		return nil, errors.New("create channels is required")
 	}
 
-	if s.updateNotesChan == nil {
-		return nil, errors.New("update notes channel is required")
+	if s.updateChannels == nil {
+		return nil, errors.New("update channels is required")
 	}
 
 	if s.createHandler == nil {
@@ -72,15 +72,19 @@ func New(opts ...ServiceOption) (*Service, error) {
 }
 
 func (s *Service) Run(ctx context.Context) {
-	go func() {
-		if err := s.handleCreateNotes(ctx); err != nil {
-			logrus.Errorf("message service: error handle create notes: %+v", err)
-		}
-	}()
+	for _, ch := range s.createChannels {
+		go func() {
+			if err := s.handleCreateOperation(ctx, ch, s.createHandler); err != nil {
+				logrus.Errorf("message service: error handle create operation: %+v", err)
+			}
+		}()
+	}
 
-	go func() {
-		if err := s.handleUpdateNotes(ctx); err != nil {
-			logrus.Errorf("message service: error handle update notes: %+v", err)
-		}
-	}()
+	for _, ch := range s.updateChannels {
+		go func() {
+			if err := s.handleUpdateOperation(ctx, ch, s.updateHandler); err != nil {
+				logrus.Errorf("message service: error handle update operation: %+v", err)
+			}
+		}()
+	}
 }

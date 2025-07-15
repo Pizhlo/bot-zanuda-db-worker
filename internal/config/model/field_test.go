@@ -351,6 +351,12 @@ func TestField_ValidateType(t *testing.T) {
 			expectedType: "unknown",
 			wantErr:      require.Error,
 		},
+		{
+			name:         "int64 as float64",
+			value:        float64(123),
+			expectedType: fieldTypeInt64,
+			wantErr:      require.NoError,
+		},
 	}
 
 	for _, tt := range tests {

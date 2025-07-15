@@ -7,7 +7,6 @@ import (
 
 // Operation представляет операцию над моделью
 type Operation struct {
-	Name            string           `yaml:"name" validate:"required"`                            // название операции
 	Type            string           `yaml:"type" validate:"required,oneof=create update delete"` // тип операции
 	Storage         string           `yaml:"storage" validate:"required,oneof=postgres"`          // хранилище, в котором нужно производить операцию
 	Table           string           `yaml:"table" validate:"required"`                           // название таблицы, в которой будет храниться модель
@@ -61,7 +60,7 @@ func (o *Operation) BuildWhereClause(conditions map[string]interface{}) (SQLClau
 }
 
 // Validate выполняет бизнес-валидацию операции
-func (o *Operation) Validate() error {
+func (o *Operation) Validate(connections []Connection) error {
 	reqIDField, ok := o.Fields["request_id"]
 	if !ok {
 		return fmt.Errorf("missing required field 'request_id' in operation's fields")
@@ -76,6 +75,13 @@ func (o *Operation) Validate() error {
 	}
 
 	if o.Request != nil {
+		connection, err := findConnection(connections, o.Request.From)
+		if err != nil {
+			return fmt.Errorf("invalid request config: %w", err)
+		}
+
+		o.Request.SetConnection(connection)
+
 		if err := o.Request.Validate(); err != nil {
 			return fmt.Errorf("invalid request config: %w", err)
 		}
@@ -92,4 +98,14 @@ func (o *Operation) Validate() error {
 	}
 
 	return nil
+}
+
+func findConnection(connections []Connection, name string) (Connection, error) {
+	for _, connection := range connections {
+		if connection.Name == name {
+			return connection, nil
+		}
+	}
+
+	return Connection{}, fmt.Errorf("connection '%s' not found", name)
 }

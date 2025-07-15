@@ -9,36 +9,36 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type UpdateNoteHandler struct {
+type UpdateHandler struct {
 	buffer     *buffer.Buffer
 	bufferSize int
 
-	notesStorage noteUpdater // репозиторий для работы с заметками
+	storage storageUpdater // репозиторий для работы с заметками
 }
 
 // интерфейс для работы с заметками.
 //
 //go:generate mockgen -source=update_handler.go -destination=./mocks/update_handler_mock.go -package=handler NoteUpdater
-type noteUpdater interface {
+type storageUpdater interface {
 	UpdateNotes(ctx context.Context, note []interfaces.Message)
 }
 
-type updateNoteHandlerOption func(*UpdateNoteHandler)
+type updateHandlerOption func(*UpdateHandler)
 
-func WithBufferSizeUpdateNoteHandler(bufferSize int) updateNoteHandlerOption {
-	return func(h *UpdateNoteHandler) {
+func WithBufferSizeUpdateHandler(bufferSize int) updateHandlerOption {
+	return func(h *UpdateHandler) {
 		h.bufferSize = bufferSize
 	}
 }
 
-func WithNotesUpdater(notesStorage noteUpdater) updateNoteHandlerOption {
-	return func(h *UpdateNoteHandler) {
-		h.notesStorage = notesStorage
+func WithNotesUpdater(notesStorage storageUpdater) updateHandlerOption {
+	return func(h *UpdateHandler) {
+		h.storage = notesStorage
 	}
 }
 
-func NewUpdateNoteHandler(opts ...updateNoteHandlerOption) (*UpdateNoteHandler, error) {
-	h := &UpdateNoteHandler{}
+func NewUpdateHandler(opts ...updateHandlerOption) (*UpdateHandler, error) {
+	h := &UpdateHandler{}
 
 	for _, opt := range opts {
 		opt(h)
@@ -48,7 +48,7 @@ func NewUpdateNoteHandler(opts ...updateNoteHandlerOption) (*UpdateNoteHandler, 
 		return nil, fmt.Errorf("buffer size is 0")
 	}
 
-	if h.notesStorage == nil {
+	if h.storage == nil {
 		return nil, fmt.Errorf("notes storage is nil")
 	}
 
@@ -57,8 +57,8 @@ func NewUpdateNoteHandler(opts ...updateNoteHandlerOption) (*UpdateNoteHandler, 
 	return h, nil
 }
 
-func (h *UpdateNoteHandler) Handle(ctx context.Context, msg interfaces.Message, shouldSave bool) error {
-	logrus.Debugf("update note handler: handle message: %+v", msg)
+func (h *UpdateHandler) Handle(ctx context.Context, msg interfaces.Message, shouldSave bool) error {
+	logrus.Debugf("update handler: handle message: %+v", msg)
 
 	err := h.buffer.Add(msg)
 	if err != nil {
@@ -71,7 +71,7 @@ func (h *UpdateNoteHandler) Handle(ctx context.Context, msg interfaces.Message, 
 
 		logrus.Debugf("update note handler: buffer is full, saving %d notes", len(notes))
 
-		go h.notesStorage.UpdateNotes(ctx, notes)
+		go h.storage.UpdateNotes(ctx, notes)
 
 		h.buffer.Flush()
 	}

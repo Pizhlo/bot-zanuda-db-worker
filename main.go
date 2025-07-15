@@ -37,13 +37,10 @@ func main() {
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		app.NoteCreator.Close()
 		app.TxSaver.Close()
-		app.NoteUpdater.Close()
 
-		err = app.Rabbit.Close()
-		if err != nil {
-			logrus.Errorf("error closing rabbit: %+v", err)
+		for _, conn := range app.Connections {
+			conn.Close()
 		}
 
 	}(&wg)

@@ -123,7 +123,16 @@ func (f *fieldValidator) validateInt(value interface{}) error {
 
 func (f *fieldValidator) validateInt64(value interface{}) error {
 	if _, ok := value.(int64); !ok {
-		return fmt.Errorf("expected int64, got %s", reflect.TypeOf(value).String())
+		switch v := value.(type) {
+		case float64:
+			if v != float64(int(v)) { // если нет дробной части - ок
+				return fmt.Errorf("expected int64, got %s", reflect.TypeOf(value).String())
+			}
+
+			return nil
+		default:
+			return fmt.Errorf("expected int64, got %s", reflect.TypeOf(value).String())
+		}
 	}
 
 	return nil

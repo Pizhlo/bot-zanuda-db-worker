@@ -9,36 +9,36 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type CreateNoteHandler struct {
+type CreateHandler struct {
 	buffer     *buffer.Buffer
 	bufferSize int
 
-	notesStorage noteCreator // репозиторий для работы с заметками
+	storage storageCreator // репозиторий для работы с заметками
 }
 
 // интерфейс для работы с заметками.
 //
 //go:generate mockgen -source=create_note.go -destination=./mocks/create_note_mock.go -package=handler NoteCreator
-type noteCreator interface {
+type storageCreator interface {
 	SaveNotes(ctx context.Context, note []interfaces.Message)
 }
 
-type createNoteHandlerOption func(*CreateNoteHandler)
+type createHandlerOption func(*CreateHandler)
 
-func WithBufferSizeCreateNoteHandler(bufferSize int) createNoteHandlerOption {
-	return func(h *CreateNoteHandler) {
+func WithBufferSizeCreateHandler(bufferSize int) createHandlerOption {
+	return func(h *CreateHandler) {
 		h.bufferSize = bufferSize
 	}
 }
 
-func WithNotesCreator(notesStorage noteCreator) createNoteHandlerOption {
-	return func(h *CreateNoteHandler) {
-		h.notesStorage = notesStorage
+func WithNotesCreator(notesStorage storageCreator) createHandlerOption {
+	return func(h *CreateHandler) {
+		h.storage = notesStorage
 	}
 }
 
-func NewCreateNoteHandler(opts ...createNoteHandlerOption) (*CreateNoteHandler, error) {
-	h := &CreateNoteHandler{}
+func NewCreateHandler(opts ...createHandlerOption) (*CreateHandler, error) {
+	h := &CreateHandler{}
 
 	for _, opt := range opts {
 		opt(h)
@@ -48,7 +48,7 @@ func NewCreateNoteHandler(opts ...createNoteHandlerOption) (*CreateNoteHandler, 
 		return nil, fmt.Errorf("buffer size is 0")
 	}
 
-	if h.notesStorage == nil {
+	if h.storage == nil {
 		return nil, fmt.Errorf("notes storage is nil")
 	}
 
@@ -57,21 +57,21 @@ func NewCreateNoteHandler(opts ...createNoteHandlerOption) (*CreateNoteHandler, 
 	return h, nil
 }
 
-func (h *CreateNoteHandler) Handle(ctx context.Context, msg interfaces.Message, shouldSave bool) error {
-	logrus.Debugf("create note handler: handle message: %+v", msg)
+func (h *CreateHandler) Handle(ctx context.Context, msg interfaces.Message, shouldSave bool) error {
+	logrus.Debugf("create handler: handle message: %+v", msg)
 
 	err := h.buffer.Add(msg)
 	if err != nil {
-		return fmt.Errorf("create note handler: error add message to buffer: %+v", err)
+		return fmt.Errorf("create handler: error add message to buffer: %+v", err)
 	}
 
 	// если буфер заполнен или нужно сохранить сообщение, то отправляем его в БД
 	if h.buffer.IsFull() || shouldSave {
 		notes := h.buffer.Get()
 
-		logrus.Debugf("create note handler: buffer is full, saving %d notes", len(notes))
+		logrus.Debugf("create handler: buffer is full, saving %d records", len(notes))
 
-		go h.notesStorage.SaveNotes(ctx, notes)
+		go h.storage.SaveNotes(ctx, notes)
 
 		h.buffer.Flush()
 	}

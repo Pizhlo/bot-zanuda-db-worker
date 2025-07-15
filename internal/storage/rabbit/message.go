@@ -8,18 +8,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// HandleNotes - горутина для чтения канала notesTopic. Обрабатывает запросы на создание, обновление, удаление заметок.
-func (s *Worker) HandleNotes(ctx context.Context) {
-	logrus.Debugf("rabbit: start handle message")
+// HandleTopic - горутина для чтения канала notesTopic. Обрабатывает запросы на создание, обновление, удаление заметок.
+func (s *Worker) HandleTopic(ctx context.Context) {
+	logrus.Debugf("rabbit: start handle message in queue %s", s.queue.Name)
 
 	msgs, err := s.channel.Consume(
-		s.notesTopic.Name, // queue
-		"",                // consumer
-		true,              // auto-ack
-		false,             // exclusive
-		false,             // no-local
-		false,             // no-wait
-		nil,               // args
+		s.queue.Name, // queue
+		"",           // consumer
+		true,         // auto-ack
+		false,        // exclusive
+		false,        // no-local
+		false,        // no-wait
+		nil,          // args
 	)
 	if err != nil {
 		logrus.Errorf("rabbit: error consume message: %+v", err)
@@ -30,60 +30,68 @@ func (s *Worker) HandleNotes(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-msgs:
-			logrus.Debugf("rabbit: received message: %s", string(msg.Body))
+			body := model.Message{}
 
-			var note map[string]any
-			err = json.Unmarshal(msg.Body, &note)
-			if err != nil {
+			logrus.Debugf("rabbit: new message in queue %s", s.queue.Name)
+
+			if err := json.Unmarshal(msg.Body, &body); err != nil {
 				logrus.Errorf("rabbit: error unmarshal message: %+v", err)
-
-				continue
 			}
 
-			operationAny, ok := note["operation"]
+			op, ok := body["operation"]
 			if !ok {
-				logrus.Errorf("rabbit: operation not found in message: %+v", note)
-
+				logrus.Errorf("rabbit: operation is required")
 				continue
 			}
 
-			operation, ok := operationAny.(string)
+			opStr, ok := op.(string)
 			if !ok {
-				logrus.Errorf("rabbit: operation is not a string: %+v. Request: %+v", operationAny, note["request_id"])
-
+				logrus.Errorf("rabbit: operation is not a string")
 				continue
 			}
 
-			switch model.Operation(operation) {
-			case model.CreateOp:
-				var create model.CreateNoteRequest
-				err = json.Unmarshal(msg.Body, &create)
-				if err != nil {
-					logrus.Errorf("rabbit: error unmarshal message: %+v", err)
+			if opStr != s.config.operation {
+				logrus.Infof("rabbit: operation %s is not %s", opStr, s.config.operation)
+				continue
+			}
 
+			visitedFields := make(map[string]bool)
+
+			for fieldName, field := range s.config.fields {
+				if field.Required {
+					visitedFields[fieldName] = false
+				}
+			}
+
+			for fieldName, field := range s.config.fields {
+				if _, ok := body[fieldName]; !ok && field.Required {
+					logrus.Errorf("rabbit: field %s not found in message", fieldName)
 					continue
 				}
 
-				logrus.Debugf("rabbit: received create note message: %+v", create)
+				visitedFields[fieldName] = true
 
-				s.createNotesChan <- create
-			case model.UpdateOp:
-				var update model.UpdateNoteRequest
-				err = json.Unmarshal(msg.Body, &update)
-				if err != nil {
-					logrus.Errorf("rabbit: error unmarshal message: %+v", err)
-
+				if err := field.ValidateField(body[fieldName]); err != nil {
+					logrus.Errorf("rabbit: error validate field %s: %+v", fieldName, err)
 					continue
 				}
+			}
 
-				logrus.Debugf("rabbit: received update note message: %+v", update)
-
-				s.updateNotesChan <- update
-			default:
-				logrus.Errorf("rabbit: unknown operation: %+v. Request: %+v", operationAny, note["request_id"])
-
+			requestID, ok := body["request_id"]
+			if !ok {
+				logrus.Errorf("rabbit: request_id not found in message")
 				continue
 			}
+
+			for fieldName, visited := range visitedFields {
+				if !visited {
+					logrus.Errorf("rabbit: field %s not found in message. RequestID: %s", fieldName, requestID)
+				}
+			}
+
+			s.msgChan <- body
+
+			logrus.Debugf("rabbit: successfully processed message in queue %s. RequestID: %s", s.queue.Name, requestID)
 		}
 	}
 }

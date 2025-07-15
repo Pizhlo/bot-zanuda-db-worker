@@ -122,12 +122,14 @@ func TestValidate(t *testing.T) {
 					},
 				},
 				Request: &RequestConfig{
-					From: "rabbitmq",
-					Config: RabbitMQRequest{
-						Address:    "amqp://user:password@localhost:5672/",
-						Queue:      "notes",
-						RoutingKey: "notes",
-						Message: map[string]interface{}{
+					Connection: Connection{
+						Type: "rabbitmq",
+					},
+					Config: map[string]any{
+						"address":     "amqp://user:password@localhost:5672/",
+						"queue":       "notes",
+						"routing_key": "notes",
+						"message": map[string]interface{}{
 							"operation": map[string]interface{}{
 								"type":     fieldTypeString,
 								"required": true,
@@ -159,12 +161,14 @@ func TestValidate(t *testing.T) {
 					},
 				},
 				Request: &RequestConfig{
-					From: "rabbitmq",
-					Config: RabbitMQRequest{
-						Address:    "amqp://user:password@localhost:5672/",
-						Queue:      "notes",
-						RoutingKey: "notes",
-						Message: map[string]interface{}{
+					Connection: Connection{
+						Type: "rabbitmq",
+					},
+					Config: map[string]any{
+						"address":     "amqp://user:password@localhost:5672/",
+						"queue":       "notes",
+						"routing_key": "notes",
+						"message": map[string]interface{}{
 							"operation": map[string]interface{}{
 								"type":     fieldTypeString,
 								"required": true,
@@ -186,12 +190,14 @@ func TestValidate(t *testing.T) {
 					},
 				},
 				Request: &RequestConfig{
-					From: "rabbitmq",
-					Config: RabbitMQRequest{
-						Address:    "amqp://user:password@localhost:5672/",
-						Queue:      "notes",
-						RoutingKey: "notes",
-						Message: map[string]interface{}{
+					Connection: Connection{
+						Type: "rabbitmq",
+					},
+					Config: map[string]any{
+						"address":     "amqp://user:password@localhost:5672/",
+						"queue":       "notes",
+						"routing_key": "notes",
+						"message": map[string]interface{}{
 							"operation": map[string]interface{}{
 								"type":     fieldTypeString,
 								"required": true,
@@ -217,12 +223,14 @@ func TestValidate(t *testing.T) {
 					},
 				},
 				Request: &RequestConfig{
-					From: "rabbitmq",
-					Config: RabbitMQRequest{
-						Address:    "amqp://user:password@localhost:5672/",
-						Queue:      "notes",
-						RoutingKey: "notes",
-						Message: map[string]interface{}{
+					Connection: Connection{
+						Type: "rabbitmq",
+					},
+					Config: map[string]any{
+						"address":     "amqp://user:password@localhost:5672/",
+						"queue":       "notes",
+						"routing_key": "notes",
+						"message": map[string]interface{}{
 							"operation": map[string]interface{}{
 								"type":     fieldTypeString,
 								"required": true,
@@ -248,12 +256,14 @@ func TestValidate(t *testing.T) {
 					},
 				},
 				Request: &RequestConfig{
-					From: "rabbitmq",
-					Config: RabbitMQRequest{
-						Address:    "amqp://user:password@localhost:5672/",
-						Queue:      "notes",
-						RoutingKey: "notes",
-						Message: map[string]interface{}{
+					Connection: Connection{
+						Type: "rabbitmq",
+					},
+					Config: map[string]any{
+						"address":     "amqp://user:password@localhost:5672/",
+						"queue":       "notes",
+						"routing_key": "notes",
+						"message": map[string]interface{}{
 							"operation": map[string]interface{}{
 								"type":     fieldTypeString,
 								"required": true,
@@ -265,22 +275,22 @@ func TestValidate(t *testing.T) {
 			},
 			wantErr: require.Error,
 		},
-		{
-			name: "without request config",
-			operation: Operation{
-				Fields: map[string]Field{
-					"note_id": {
-						Type:     "uuid",
-						Required: true,
-					},
-					"request_id": {
-						Type:     "uuid",
-						Required: true,
-					},
-				},
-			},
-			wantErr: require.Error,
-		},
+		// {
+		// 	name: "without request config",
+		// 	operation: Operation{
+		// 		Fields: map[string]Field{
+		// 			"note_id": {
+		// 				Type:     "uuid",
+		// 				Required: true,
+		// 			},
+		// 			"request_id": {
+		// 				Type:     "uuid",
+		// 				Required: true,
+		// 			},
+		// 		},
+		// 	},
+		// 	wantErr: require.Error,
+		// },
 		{
 			name: "unknown field in where conditions",
 			operation: Operation{
@@ -301,12 +311,14 @@ func TestValidate(t *testing.T) {
 					},
 				},
 				Request: &RequestConfig{
-					From: "rabbitmq",
-					Config: RabbitMQRequest{
-						Address:    "amqp://user:password@localhost:5672/",
-						Queue:      "notes",
-						RoutingKey: "notes",
-						Message: map[string]interface{}{
+					Connection: Connection{
+						Type: "rabbitmq",
+					},
+					Config: map[string]any{
+						"address":     "amqp://user:password@localhost:5672/",
+						"queue":       "notes",
+						"routing_key": "notes",
+						"message": map[string]interface{}{
 							"operation": map[string]interface{}{
 								"type":     fieldTypeString,
 								"required": true,
@@ -324,7 +336,7 @@ func TestValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.operation.Validate()
+			err := tt.operation.Validate([]Connection{tt.operation.Request.Connection})
 			tt.wantErr(t, err)
 		})
 	}

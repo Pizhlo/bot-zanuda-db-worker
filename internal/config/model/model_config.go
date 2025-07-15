@@ -11,7 +11,8 @@ import (
 
 // ModelConfig представляет конфигурацию моделей
 type ModelConfig struct {
-	Models map[string]Model `yaml:"models" validate:"required"`
+	Models      map[string]Model `yaml:"models" validate:"required"`
+	Connections []Connection     `yaml:"connections" validate:"required,dive"`
 }
 
 // Model представляет модель данных
@@ -36,7 +37,7 @@ func LoadModelConfig(path string) (*ModelConfig, error) {
 	// Бизнес-валидация операций
 	for modelName, model := range config.Models {
 		for opName, op := range model.Operations {
-			if err := op.Validate(); err != nil {
+			if err := op.Validate(config.Connections); err != nil {
 				return nil, fmt.Errorf("model %s operation %s: %w", modelName, opName, err)
 			}
 		}

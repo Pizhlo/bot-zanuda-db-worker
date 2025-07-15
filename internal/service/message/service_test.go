@@ -29,44 +29,44 @@ func TestNew(t *testing.T) {
 		{
 			name: "positive case",
 			opts: []ServiceOption{
-				WithCreateNotesChan(createNotesChan),
+				WithCreateChannels([]chan interfaces.Message{createNotesChan}),
 				WithCreateHandler(createNotesHandler),
-				WithUpdateNotesChan(updateNotesChan),
+				WithUpdateChannels([]chan interfaces.Message{updateNotesChan}),
 				WithUpdateHandler(updateNotesHandler),
 			},
 			expectedService: &Service{
-				createNotesChan: createNotesChan,
-				createHandler:   createNotesHandler,
-				updateNotesChan: updateNotesChan,
-				updateHandler:   updateNotesHandler,
+				createChannels: []chan interfaces.Message{createNotesChan},
+				createHandler:  createNotesHandler,
+				updateChannels: []chan interfaces.Message{updateNotesChan},
+				updateHandler:  updateNotesHandler,
 			},
 		},
 		{
-			name: "negative case: createNotesChan is nil",
+			name: "negative case: create channels is nil",
 			opts: []ServiceOption{
 				WithCreateHandler(createNotesHandler),
-				WithUpdateNotesChan(updateNotesChan),
+				WithUpdateChannels([]chan interfaces.Message{updateNotesChan}),
 				WithUpdateHandler(updateNotesHandler),
 			},
-			err: errors.New("create notes channel is required"),
+			err: errors.New("create channels is required"),
 		},
 		{
 			name: "negative case: createHandler is nil",
 			opts: []ServiceOption{
-				WithCreateNotesChan(createNotesChan),
-				WithUpdateNotesChan(updateNotesChan),
+				WithCreateChannels([]chan interfaces.Message{createNotesChan}),
+				WithUpdateChannels([]chan interfaces.Message{updateNotesChan}),
 				WithUpdateHandler(updateNotesHandler),
 			},
 			err: errors.New("create handler is required"),
 		},
 		{
-			name: "negative case: updateNotesChan is nil",
+			name: "negative case: update channels is nil",
 			opts: []ServiceOption{
-				WithCreateNotesChan(createNotesChan),
+				WithCreateChannels([]chan interfaces.Message{createNotesChan}),
 				WithCreateHandler(createNotesHandler),
 				WithUpdateHandler(updateNotesHandler),
 			},
-			err: errors.New("update notes channel is required"),
+			err: errors.New("update channels is required"),
 		},
 	}
 

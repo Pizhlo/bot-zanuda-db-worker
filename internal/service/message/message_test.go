@@ -28,14 +28,15 @@ func TestHandleCreateNotes(t *testing.T) {
 
 	msgChan := make(chan interfaces.Message, bufferSize)
 	service := &Service{
-		createNotesChan: msgChan,
-		createHandler:   createHandler,
+		createChannels: []chan interfaces.Message{msgChan},
+		createHandler:  createHandler,
+		updateChannels: []chan interfaces.Message{msgChan},
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	go service.handleCreateNotes(ctx)
+	go service.handleCreateOperation(ctx, msgChan, createHandler)
 
 	done := make(chan struct{})
 
@@ -96,14 +97,14 @@ func TestHandleUpdateNotes(t *testing.T) {
 
 	msgChan := make(chan interfaces.Message, bufferSize)
 	service := &Service{
-		updateNotesChan: msgChan,
-		updateHandler:   updateHandler,
+		updateChannels: []chan interfaces.Message{msgChan},
+		updateHandler:  updateHandler,
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	go service.handleUpdateNotes(ctx)
+	go service.handleUpdateOperation(ctx, msgChan, updateHandler)
 
 	done := make(chan struct{})
 

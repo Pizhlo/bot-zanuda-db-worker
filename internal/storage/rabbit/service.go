@@ -1,6 +1,7 @@
 package rabbit
 
 import (
+	config "db-worker/internal/config/model"
 	interfaces "db-worker/internal/service/message/interface"
 	"fmt"
 
@@ -10,19 +11,15 @@ import (
 
 type Worker struct {
 	config struct {
-		address string
-
-		// queues
-		notesTopic  string
-		spacesTopic string
+		address   string
+		topic     string
+		fields    map[string]config.Field
+		operation string
 	}
 
-	createNotesChan chan interfaces.Message
-	updateNotesChan chan interfaces.Message
+	msgChan chan interfaces.Message
 
-	// queues
-	notesTopic  amqp.Queue
-	spacesTopic amqp.Queue
+	queue amqp.Queue
 
 	conn    *amqp.Connection
 	channel *amqp.Channel
@@ -39,27 +36,9 @@ func WithAddress(address string) RabbitOption {
 	}
 }
 
-func WithCreateNotesChan(createNotesChan chan interfaces.Message) RabbitOption {
+func WithMsgChan(msgChan chan interfaces.Message) RabbitOption {
 	return func(w *Worker) {
-		w.createNotesChan = createNotesChan
-	}
-}
-
-func WithUpdateNotesChan(updateNotesChan chan interfaces.Message) RabbitOption {
-	return func(w *Worker) {
-		w.updateNotesChan = updateNotesChan
-	}
-}
-
-func WithNotesTopic(notesTopic string) RabbitOption {
-	return func(w *Worker) {
-		w.config.notesTopic = notesTopic
-	}
-}
-
-func WithSpacesTopic(spacesTopic string) RabbitOption {
-	return func(w *Worker) {
-		w.config.spacesTopic = spacesTopic
+		w.msgChan = msgChan
 	}
 }
 
@@ -72,6 +51,24 @@ func WithInsertTimeout(insertTimeout int) RabbitOption {
 func WithReadTimeout(readTimeout int) RabbitOption {
 	return func(w *Worker) {
 		w.readTimeout = readTimeout
+	}
+}
+
+func WithTopic(topic string) RabbitOption {
+	return func(w *Worker) {
+		w.config.topic = topic
+	}
+}
+
+func WithFields(fields map[string]config.Field) RabbitOption {
+	return func(w *Worker) {
+		w.config.fields = fields
+	}
+}
+
+func WithOperation(operation string) RabbitOption {
+	return func(w *Worker) {
+		w.config.operation = operation
 	}
 }
 
@@ -94,26 +91,22 @@ func New(opts ...RabbitOption) (*Worker, error) {
 		return nil, fmt.Errorf("rabbit: address is required")
 	}
 
-	if w.config.notesTopic == "" {
-		return nil, fmt.Errorf("rabbit: notes topic is required")
+	if w.msgChan == nil {
+		return nil, fmt.Errorf("rabbit: message channel is required")
 	}
 
-	if w.config.spacesTopic == "" {
-		return nil, fmt.Errorf("rabbit: spaces topic is required")
+	if w.config.fields == nil {
+		return nil, fmt.Errorf("rabbit: model is required")
 	}
 
-	if w.createNotesChan == nil {
-		return nil, fmt.Errorf("rabbit: create notes message channel is required")
-	}
-
-	if w.updateNotesChan == nil {
-		return nil, fmt.Errorf("rabbit: update notes message channel is required")
+	if w.config.operation == "" {
+		return nil, fmt.Errorf("rabbit: operation is required")
 	}
 
 	return w, nil
 }
 
-func (s *Worker) Connect() error {
+func (s *Worker) Connect(topic string) error {
 	conn, err := amqp.Dial(s.config.address)
 	if err != nil {
 		return fmt.Errorf("rabbit: error creating connection: %w", err)
@@ -128,38 +121,27 @@ func (s *Worker) Connect() error {
 
 	s.channel = ch
 
-	notesTopic, err := ch.QueueDeclare(
-		s.config.notesTopic, // name
-		true,                // durable
-		false,               // delete when unused
-		false,               // exclusive
-		false,               // no-wait
-		nil,                 // arguments
+	queue, err := ch.QueueDeclare(
+		topic, // name
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
 	)
 	if err != nil {
-		return fmt.Errorf("error creating queue %s: %+v", s.config.notesTopic, err)
+		return fmt.Errorf("error creating queue %s: %+v", topic, err)
 	}
 
-	s.notesTopic = notesTopic
+	s.queue = queue
+	s.config.topic = topic
 
-	spacesTopic, err := ch.QueueDeclare(
-		s.config.spacesTopic, // name
-		true,                 // durable
-		false,                // delete when unused
-		false,                // exclusive
-		false,                // no-wait
-		nil,                  // arguments
-	)
-	if err != nil {
-		return fmt.Errorf("error creating queue %s: %+v", s.config.spacesTopic, err)
-	}
-
-	s.spacesTopic = spacesTopic
+	logrus.Infof("successfully created queue %s", topic)
 
 	return nil
 }
 
-func (s *Worker) Close() error {
+func (s *Worker) Close() {
 	err := s.channel.Close()
 	if err != nil {
 		logrus.Errorf("worker: error closing channel rabbit mq: %+v", err)
@@ -168,6 +150,4 @@ func (s *Worker) Close() error {
 	if err := s.conn.Close(); err != nil {
 		logrus.Errorf("worker: error closing connection rabbit mq: %+v", err)
 	}
-
-	return nil
 }
