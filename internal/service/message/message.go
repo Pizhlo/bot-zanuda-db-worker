@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (s *Service) handleCreateOperation(ctx context.Context, ch chan interfaces.Message, handler interfaces.Handler) error {
+func (s *Service) handleCreateOperation(ctx context.Context, ch chan interfaces.Message) error {
 	logrus.Debugf("message service: start handle create operation")
 
 	for {
@@ -31,7 +31,7 @@ func (s *Service) handleCreateOperation(ctx context.Context, ch chan interfaces.
 	}
 }
 
-func (s *Service) handleUpdateOperation(ctx context.Context, ch chan interfaces.Message, handler interfaces.Handler) error {
+func (s *Service) handleUpdateOperation(ctx context.Context, ch chan interfaces.Message) error {
 	logrus.Debugf("message service: start handle update operation")
 
 	for {

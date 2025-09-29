@@ -72,7 +72,7 @@ func NewApp(ctx context.Context, configPath string, modelConfigPath string) (*Ap
 				msgChan := make(chan interfaces.Message, cfg.Storage.BufferSize)
 
 				app.Connections = append(app.Connections,
-					initRabbit(ctx, operation.Request.Connection.Address, handler.GetTopic(), cfg.Storage.RabbitMQ.InsertTimeout, cfg.Storage.RabbitMQ.ReadTimeout, msgChan, operation.Fields, operation.Type))
+					initRabbit(ctx, operation.Request.Connection.Address, handler.GetTopic(), cfg.Storage.RabbitMQ.InsertTimeout, cfg.Storage.RabbitMQ.ReadTimeout, msgChan, operation.Fields, operation.Type, handler.GetRoutingKey()))
 
 				saveChannel(msgChan, &createChannels, &updateChannels, operation.Type)
 			case model_config.HTTPRequestType:
@@ -142,7 +142,7 @@ func setLogLevel(level string) {
 	logrus.Infof("log level: %+v", logrus.GetLevel())
 }
 
-func initRabbit(ctx context.Context, addr string, topic string, insertTimeout int, readTimeout int, msgChan chan interfaces.Message, fields map[string]model_config.Field, operation string) *rabbit.Worker {
+func initRabbit(ctx context.Context, addr string, topic string, insertTimeout int, readTimeout int, msgChan chan interfaces.Message, fields map[string]model_config.Field, operation string, routingKey string) *rabbit.Worker {
 	logrus.Infof("connecting rabbit on %s", addr)
 
 	rabbit := start(rabbit.New(
@@ -152,6 +152,7 @@ func initRabbit(ctx context.Context, addr string, topic string, insertTimeout in
 		rabbit.WithReadTimeout(readTimeout),
 		rabbit.WithFields(fields),
 		rabbit.WithOperation(operation),
+		rabbit.WithRoutingKey(routingKey),
 	))
 
 	startService(rabbit.Connect(topic), "rabbit")

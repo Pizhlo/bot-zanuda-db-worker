@@ -11,14 +11,14 @@ import (
 
 type RabbitMQ struct {
 	Address       string `yaml:"address" validate:"required,rabbitmq_address"`
-	NoteQueue     string `yaml:"note_queue" validate:"required"`
-	SpaceQueue    string `yaml:"space_queue" validate:"required"`
+	NoteExchange  string `yaml:"note_exchange" validate:"required"`
+	SpaceExchange string `yaml:"space_exchange" validate:"required"`
 	InsertTimeout int    `yaml:"insert_timeout" validate:"required,min=1"`
 	ReadTimeout   int    `yaml:"read_timeout" validate:"required,min=1"`
 }
 
 type Postgres struct {
-	Host          string `yaml:"host" validate:"required,hostname"`
+	Host          string `yaml:"host" validate:"required"`
 	Port          int    `yaml:"port" validate:"required,min=1024,max=65535"`
 	User          string `yaml:"user" validate:"required"`
 	Password      string `yaml:"password" validate:"required"`

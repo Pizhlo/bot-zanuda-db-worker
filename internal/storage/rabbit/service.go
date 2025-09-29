@@ -11,10 +11,11 @@ import (
 
 type Worker struct {
 	config struct {
-		address   string
-		topic     string
-		fields    map[string]config.Field
-		operation string
+		address    string
+		topic      string
+		routingKey string
+		fields     map[string]config.Field
+		operation  string
 	}
 
 	msgChan chan interfaces.Message
@@ -72,6 +73,12 @@ func WithOperation(operation string) RabbitOption {
 	}
 }
 
+func WithRoutingKey(routingKey string) RabbitOption {
+	return func(w *Worker) {
+		w.config.routingKey = routingKey
+	}
+}
+
 func New(opts ...RabbitOption) (*Worker, error) {
 	w := &Worker{}
 
@@ -103,6 +110,10 @@ func New(opts ...RabbitOption) (*Worker, error) {
 		return nil, fmt.Errorf("rabbit: operation is required")
 	}
 
+	if w.config.routingKey == "" {
+		return nil, fmt.Errorf("rabbit: routing key is required")
+	}
+
 	return w, nil
 }
 
@@ -121,22 +132,51 @@ func (s *Worker) Connect(topic string) error {
 
 	s.channel = ch
 
-	queue, err := ch.QueueDeclare(
-		topic, // name
-		true,  // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
+	// Declare topic exchange for notes
+	err = ch.ExchangeDeclare(
+		"notes", // name
+		"topic", // type
+		true,    // durable
+		false,   // auto-deleted
+		false,   // internal
+		false,   // no-wait
+		nil,     // arguments
 	)
 	if err != nil {
-		return fmt.Errorf("error creating queue %s: %+v", topic, err)
+		return fmt.Errorf("error declaring exchange notes: %+v", err)
+	}
+
+	// Create unique queue name for this worker instance
+	queueName := fmt.Sprintf("%s_%s_%s", topic, s.config.operation, s.config.routingKey)
+
+	queue, err := ch.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("error creating queue %s: %+v", queueName, err)
+	}
+
+	// Bind queue to exchange with specific routing key
+	err = ch.QueueBind(
+		queue.Name,
+		s.config.routingKey, // routing key (create, update, delete)
+		"notes",             // exchange name
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("error binding queue %s to routing key %s: %+v", queue.Name, s.config.routingKey, err)
 	}
 
 	s.queue = queue
 	s.config.topic = topic
 
-	logrus.Infof("successfully created queue %s", topic)
+	logrus.Infof("successfully created queue %s bound to exchange 'notes' with routing key '%s'", queueName, s.config.routingKey)
 
 	return nil
 }

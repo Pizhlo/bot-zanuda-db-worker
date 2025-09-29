@@ -71,7 +71,8 @@ func (h *CreateHandler) Handle(ctx context.Context, msg interfaces.Message, shou
 
 		logrus.Debugf("create handler: buffer is full, saving %d records", len(notes))
 
-		go h.storage.SaveNotes(ctx, notes)
+		// TODO: временно отключены операции с БД
+		// go h.storage.SaveNotes(ctx, notes)
 
 		h.buffer.Flush()
 	}

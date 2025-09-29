@@ -10,12 +10,12 @@ import (
 
 // HandleTopic - горутина для чтения канала notesTopic. Обрабатывает запросы на создание, обновление, удаление заметок.
 func (s *Worker) HandleTopic(ctx context.Context) {
-	logrus.Debugf("rabbit: start handle message in queue %s", s.queue.Name)
+	logrus.Debugf("rabbit: start handle message in queue %s and routing key %s", s.queue.Name, s.config.routingKey)
 
 	msgs, err := s.channel.Consume(
 		s.queue.Name, // queue
 		"",           // consumer
-		true,         // auto-ack
+		false,        // auto-ack
 		false,        // exclusive
 		false,        // no-local
 		false,        // no-wait
@@ -55,11 +55,11 @@ func (s *Worker) HandleTopic(ctx context.Context) {
 				continue
 			}
 
-			visitedFields := make(map[string]bool)
+			processedFields := make(map[string]bool)
 
 			for fieldName, field := range s.config.fields {
 				if field.Required {
-					visitedFields[fieldName] = false
+					processedFields[fieldName] = false
 				}
 			}
 
@@ -69,7 +69,7 @@ func (s *Worker) HandleTopic(ctx context.Context) {
 					continue
 				}
 
-				visitedFields[fieldName] = true
+				processedFields[fieldName] = true
 
 				if err := field.ValidateField(body[fieldName]); err != nil {
 					logrus.Errorf("rabbit: error validate field %s: %+v", fieldName, err)
@@ -83,13 +83,19 @@ func (s *Worker) HandleTopic(ctx context.Context) {
 				continue
 			}
 
-			for fieldName, visited := range visitedFields {
-				if !visited {
+			for fieldName, processed := range processedFields {
+				if !processed {
 					logrus.Errorf("rabbit: field %s not found in message. RequestID: %s", fieldName, requestID)
 				}
 			}
 
 			s.msgChan <- body
+
+			err = msg.Ack(false)
+			if err != nil {
+				logrus.Errorf("rabbit: error ack message: %+v", err)
+				continue
+			}
 
 			logrus.Debugf("rabbit: successfully processed message in queue %s. RequestID: %s", s.queue.Name, requestID)
 		}

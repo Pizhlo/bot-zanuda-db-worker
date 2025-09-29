@@ -74,7 +74,7 @@ func New(opts ...ServiceOption) (*Service, error) {
 func (s *Service) Run(ctx context.Context) {
 	for _, ch := range s.createChannels {
 		go func() {
-			if err := s.handleCreateOperation(ctx, ch, s.createHandler); err != nil {
+			if err := s.handleCreateOperation(ctx, ch); err != nil {
 				logrus.Errorf("message service: error handle create operation: %+v", err)
 			}
 		}()
@@ -82,7 +82,7 @@ func (s *Service) Run(ctx context.Context) {
 
 	for _, ch := range s.updateChannels {
 		go func() {
-			if err := s.handleUpdateOperation(ctx, ch, s.updateHandler); err != nil {
+			if err := s.handleUpdateOperation(ctx, ch); err != nil {
 				logrus.Errorf("message service: error handle update operation: %+v", err)
 			}
 		}()

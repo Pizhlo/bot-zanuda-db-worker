@@ -17,7 +17,6 @@ type RequestConfig struct {
 // RabbitMQRequest представляет конфигурацию RabbitMQ запроса
 type RabbitMQRequest struct {
 	Queue      string                 `yaml:"queue" validate:"required"`
-	Address    string                 `yaml:"address" validate:"required,rabbitmq_address"`
 	RoutingKey string                 `yaml:"routing_key" validate:"required"`
 	Message    map[string]interface{} `yaml:"message" validate:"required"`
 }
@@ -38,8 +37,8 @@ type HTTPRequest struct {
 type RequestHandler interface {
 	GetType() string
 	Validate() error
-	GetAddress() string
 	GetTopic() string
+	GetRoutingKey() string
 }
 
 func (r *RequestConfig) SetConnection(connection Connection) {
@@ -113,14 +112,14 @@ func (r *RabbitMQRequest) GetType() string {
 	return RabbitMQRequestType
 }
 
-// GetAddress возвращает адрес RabbitMQ запроса
-func (r *RabbitMQRequest) GetAddress() string {
-	return r.Address
-}
-
 // GetTopic возвращает топик RabbitMQ запроса
 func (r *RabbitMQRequest) GetTopic() string {
 	return r.Queue
+}
+
+// GetRoutingKey возвращает routing key RabbitMQ запроса
+func (r *RabbitMQRequest) GetRoutingKey() string {
+	return r.RoutingKey
 }
 
 // Validate валидирует RabbitMQ конфигурацию
@@ -196,5 +195,10 @@ func (r *HTTPRequest) Validate() error {
 
 // GetTopic возвращает топик HTTP запроса
 func (r *HTTPRequest) GetTopic() string {
+	return ""
+}
+
+// GetRoutingKey возвращает routing key HTTP запроса
+func (r *HTTPRequest) GetRoutingKey() string {
 	return ""
 }

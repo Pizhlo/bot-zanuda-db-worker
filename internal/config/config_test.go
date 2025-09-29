@@ -36,7 +36,7 @@ func TestLoadConfig(t *testing.T) {
 					},
 					RabbitMQ: RabbitMQ{
 						Address:       "amqp://user:password@localhost:1234/",
-						NoteQueue:     "notes",
+						NoteExchange:  "notes",
 						SpaceQueue:    "spaces",
 						InsertTimeout: 5000000,
 						ReadTimeout:   5000000,

@@ -3,6 +3,7 @@ models:
     operations: # операции, которые можно выполнить над моделью
       create:
         name: create
+        type: create
         storage: postgres # хранилище, в котором нужно производить операцию
         table: notes.notes # название таблицы, в которой будет храниться модель
         fields: # поля, необходимые для операции
@@ -16,13 +17,70 @@ models:
             required: true
             value: "create"
         request: # каким образом будет получен запрос на операцию
-          from: rabbitmq
+          from: rabbit_notes
           config:
             address: "amqp://user:password@localhost:5672/"
             queue: notes
-            routing_key: notes
+            routing_key: create
             message:
               operation:
                 type: string
                 required: true
                 value: "create"
+      update:
+        name: update
+        type: update
+        storage: postgres
+        table: notes.notes
+        fields:
+          request_id:
+            type: uuid
+            required: true
+            validation:
+              - type: not_empty
+          operation:
+            type: string
+            required: true
+            value: "update"
+        request:
+          from: rabbit_notes
+          config:
+            address: "amqp://user:password@localhost:5672/"
+            queue: notes
+            routing_key: update
+            message:
+              operation:
+                type: string
+                required: true
+                value: "update"
+      delete:
+        name: delete
+        type: delete
+        storage: postgres
+        table: notes.notes
+        fields:
+          request_id:
+            type: uuid
+            required: true
+            validation:
+              - type: not_empty
+          operation:
+            type: string
+            required: true
+            value: "delete"
+        request:
+          from: rabbit_notes
+          config:
+            address: "amqp://user:password@localhost:5672/"
+            queue: notes
+            routing_key: delete
+            message:
+              operation:
+                type: string
+                required: true
+                value: "delete"
+
+connections: # соединения для получения сообщений
+  - name: "rabbit_notes"
+    type: rabbitmq
+    address: "amqp://user:password@localhost:5672/"

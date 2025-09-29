@@ -71,7 +71,8 @@ func (h *UpdateHandler) Handle(ctx context.Context, msg interfaces.Message, shou
 
 		logrus.Debugf("update note handler: buffer is full, saving %d notes", len(notes))
 
-		go h.storage.UpdateNotes(ctx, notes)
+		// TODO: временно отключены операции с БД
+		// go h.storage.UpdateNotes(ctx, notes)
 
 		h.buffer.Flush()
 	}
