@@ -114,8 +114,8 @@ func initRabbit(ctx context.Context, cfg *config.Config, createNotesChan chan in
 
 	rabbit := start(rabbit.New(
 		rabbit.WithAddress(cfg.Storage.RabbitMQ.Address),
-		rabbit.WithNotesTopic(cfg.Storage.RabbitMQ.NoteQueue),
-		rabbit.WithSpacesTopic(cfg.Storage.RabbitMQ.SpaceQueue),
+		rabbit.WithNotesTopic(cfg.Storage.RabbitMQ.NoteExchange),
+		rabbit.WithSpacesTopic(cfg.Storage.RabbitMQ.SpaceExchange),
 		rabbit.WithCreateNotesChan(createNotesChan),
 		rabbit.WithUpdateNotesChan(updateNotesChan),
 		rabbit.WithInsertTimeout(cfg.Storage.RabbitMQ.InsertTimeout),
