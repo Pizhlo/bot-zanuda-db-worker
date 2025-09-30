@@ -16,11 +16,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	configPath := flag.String("config", "internal/config/config.yaml", "path to config file")
-	modelConfigPath := flag.String("model-config", "internal/config/model/model.yaml", "path to model config file")
+	configPath := flag.String("config", "./config.yaml", "path to config file")
+	operationsConfigPath := flag.String("operations-config", "./operations.yaml", "path to operations config file")
 	flag.Parse()
 
-	app, err := app.NewApp(ctx, *configPath, *modelConfigPath)
+	app, err := app.NewApp(ctx, *configPath, *operationsConfigPath)
 	if err != nil {
 		logrus.Fatalf("error creating app: %+v", err)
 	}

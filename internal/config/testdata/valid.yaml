@@ -16,7 +16,7 @@ storage:
   
   rabbitmq:
     address: "amqp://user:password@localhost:1234/"
-    note_queue: "notes"
-    space_queue: "spaces"
+    note_exchange: "notes"
+    space_exchange: "spaces"
     insert_timeout: 5000000
     read_timeout: 5000000
