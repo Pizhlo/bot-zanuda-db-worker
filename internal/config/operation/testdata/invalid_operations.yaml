@@ -1,0 +1,31 @@
+operations: # операции, которые можно выполнить над моделью
+  - name: create_notes
+    type: create
+    fields: # поля в сообщении, необходимые для операции
+      - name: user_id
+        type: int64
+        required: true
+      - name: text
+        type: string
+        required: true
+    request: # каким образом будет получен запрос на операцию
+      from: rabbit_notes_create # соединение, из которого будет получен запрос. должно быть в списке connections
+        
+
+connections: # соединения для получения сообщений
+  - name: "rabbit_notes_create"
+    type: rabbitmq
+    address: "amqp://user:password@localhost:1234/"
+    queue: notes
+    routing_key: create
+
+storages: # куда сохранять модели
+  - name: "postgres_notes" # куда сохранять
+    type: postgres
+    host: localhost
+    port: 5432
+    user: "user"
+    password: "password"
+    db_name: "test"    
+    insert_timeout: 5000000
+    read_timeout: 5000000

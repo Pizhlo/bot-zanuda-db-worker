@@ -1,6 +1,7 @@
 package config
 
 import (
+	"db-worker/internal/config/operation"
 	"fmt"
 	"os"
 	"strings"
@@ -18,7 +19,7 @@ type RabbitMQ struct {
 }
 
 type Postgres struct {
-	Host          string `yaml:"host" validate:"required,hostname"`
+	Host          string `yaml:"host" validate:"required"`
 	Port          int    `yaml:"port" validate:"required,min=1024,max=65535"`
 	User          string `yaml:"user" validate:"required"`
 	Password      string `yaml:"password" validate:"required"`
@@ -36,6 +37,8 @@ type Config struct {
 		Postgres   Postgres `yaml:"postgres"`
 		RabbitMQ   RabbitMQ `yaml:"rabbitmq"`
 	} `yaml:"storage"`
+
+	Operations operation.OperationConfig
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -52,20 +55,31 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: error unmarshal: %w", err)
 	}
 
+	return cfg, nil
+}
+
+func (cfg *Config) LoadOperationConfig(path string) error {
+	operations, err := operation.LoadOperation(path)
+	if err != nil {
+		return fmt.Errorf("config: error loading operation config: %w", err)
+	}
+
+	cfg.Operations = operations
+
+	return nil
+}
+
+// Валидируем конфиг
+func (cfg *Config) Validate() error {
 	// Создаем валидатор
 	validate := validator.New()
 
-	err = validate.RegisterValidation("rabbitmq_address", ValidateRabbitMQAddress)
+	err := validate.RegisterValidation("rabbitmq_address", ValidateRabbitMQAddress)
 	if err != nil {
-		return nil, fmt.Errorf("config: error register validation: %w", err)
+		return fmt.Errorf("config: error register validation: %w", err)
 	}
 
-	// Валидируем конфиг
-	if err := validate.Struct(cfg); err != nil {
-		return nil, fmt.Errorf("config: error validate: %w", err)
-	}
-
-	return cfg, nil
+	return validate.Struct(cfg)
 }
 
 // ValidateRabbitMQAddress implements validator.Func
