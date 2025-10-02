@@ -37,13 +37,27 @@ func main() {
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		app.NoteCreator.Close()
 		app.TxSaver.Close()
-		app.NoteUpdater.Close()
 
-		err = app.Rabbit.Close()
-		if err != nil {
-			logrus.Errorf("error closing rabbit: %+v", err)
+		for name, worker := range app.Workers {
+			err = worker.Close()
+			if err != nil {
+				logrus.Errorf("error closing worker %s: %+v", name, err)
+			}
+		}
+
+		for name, storage := range app.Storages {
+			err = storage.Close()
+			if err != nil {
+				logrus.Errorf("error closing storage %s: %+v", name, err)
+			}
+		}
+
+		for name, operation := range app.Operations {
+			err = operation.Close()
+			if err != nil {
+				logrus.Errorf("error closing operation %s: %+v", name, err)
+			}
 		}
 
 	}(&wg)

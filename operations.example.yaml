@@ -21,6 +21,8 @@ connections: # соединения для получения сообщений
     address: "amqp://user:password@localhost:1234/"
     queue: notes
     routing_key: create
+    insert_timeout: 1
+    read_timeout: 1
 
 storages: # куда сохранять модели
   - name: "postgres_notes" # куда сохранять

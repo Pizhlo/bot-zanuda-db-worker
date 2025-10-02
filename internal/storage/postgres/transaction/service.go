@@ -126,21 +126,21 @@ func (db *Repo) BeginTx(ctx context.Context, id string) error {
 	return nil
 }
 
-func (db *Repo) getOrCreateTx(ctx context.Context, id string) (*sql.Tx, error) {
-	tx, err := db.getTx(id)
-	if err == nil {
-		return tx, nil
-	}
+// func (db *Repo) getOrCreateTx(ctx context.Context, id string) (*sql.Tx, error) {
+// 	tx, err := db.getTx(id)
+// 	if err == nil {
+// 		return tx, nil
+// 	}
 
-	tx, err = db.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error on begin transaction: %w", err)
-	}
+// 	tx, err = db.db.BeginTx(ctx, nil)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("error on begin transaction: %w", err)
+// 	}
 
-	db.transaction.tx[id] = tx
+// 	db.transaction.tx[id] = tx
 
-	return tx, nil
-}
+// 	return tx, nil
+// }
 
 func (db *Repo) getTx(id string) (*sql.Tx, error) {
 	db.transaction.mu.Lock()

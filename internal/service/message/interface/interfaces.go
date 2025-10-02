@@ -2,9 +2,6 @@ package interfaces
 
 import (
 	"context"
-	"db-worker/internal/model"
-
-	"github.com/google/uuid"
 )
 
 // Handler определяет интерфейс для обработчиков сообщений
@@ -16,8 +13,4 @@ type Handler interface {
 
 // Message определяет интерфейс для сообщений.
 type Message interface {
-	MessageType() model.MessageType
-	Model() any
-	GetRequestID() uuid.UUID
-	GetOperation() model.Operation
 }
