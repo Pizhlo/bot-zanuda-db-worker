@@ -10,14 +10,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type RabbitMQ struct {
-	Address       string `yaml:"address" validate:"required,rabbitmq_address"`
-	NoteExchange  string `yaml:"note_exchange" validate:"required"`
-	SpaceExchange string `yaml:"space_exchange" validate:"required"`
-	InsertTimeout int    `yaml:"insert_timeout" validate:"required,min=1"`
-	ReadTimeout   int    `yaml:"read_timeout" validate:"required,min=1"`
-}
-
 type Postgres struct {
 	Host          string `yaml:"host" validate:"required"`
 	Port          int    `yaml:"port" validate:"required,min=1024,max=65535"`
@@ -35,7 +27,6 @@ type Config struct {
 	Storage struct {
 		BufferSize int      `yaml:"buffer_size" validate:"required,min=1"`
 		Postgres   Postgres `yaml:"postgres"`
-		RabbitMQ   RabbitMQ `yaml:"rabbitmq"`
 	} `yaml:"storage"`
 
 	Operations operation.OperationConfig

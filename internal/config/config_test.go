@@ -30,7 +30,6 @@ func TestLoadConfig(t *testing.T) {
 				Storage: struct {
 					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
 					Postgres   Postgres "yaml:\"postgres\""
-					RabbitMQ   RabbitMQ "yaml:\"rabbitmq\""
 				}{
 					BufferSize: 100,
 					Postgres: Postgres{
@@ -39,13 +38,6 @@ func TestLoadConfig(t *testing.T) {
 						User:          "user",
 						Password:      "password",
 						DBName:        "test",
-						InsertTimeout: 5000000,
-						ReadTimeout:   5000000,
-					},
-					RabbitMQ: RabbitMQ{
-						Address:       "amqp://user:password@localhost:1234/",
-						NoteExchange:  "notes",
-						SpaceExchange: "spaces",
 						InsertTimeout: 5000000,
 						ReadTimeout:   5000000,
 					},
@@ -80,17 +72,50 @@ func TestLoadConfig(t *testing.T) {
 					},
 					Connections: []operation.Connection{
 						{
-							Name:       "rabbit_notes_create",
-							Type:       operation.ConnectionTypeRabbitMQ,
-							Address:    "amqp://user:password@localhost:1234/",
-							Queue:      "notes",
-							RoutingKey: "create",
+							Name:          "rabbit_notes_create",
+							Type:          operation.ConnectionTypeRabbitMQ,
+							Address:       "amqp://user:password@localhost:1234/",
+							Queue:         "notes",
+							RoutingKey:    "create",
+							InsertTimeout: 1,
+							ReadTimeout:   1,
 						},
 					},
 					Storages: []operation.Storage{
 						{
-							Name: "postgres_notes",
-							Type: operation.StorageTypePostgres,
+							Name:          "postgres_notes",
+							Type:          operation.StorageTypePostgres,
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test",
+							InsertTimeout: 5000000,
+							ReadTimeout:   5000000,
+						},
+					},
+					StoragesMap: map[string]operation.Storage{
+						"postgres_notes": {
+							Name:          "postgres_notes",
+							Type:          operation.StorageTypePostgres,
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test",
+							InsertTimeout: 5000000,
+							ReadTimeout:   5000000,
+						},
+					},
+					ConnectionsMap: map[string]operation.Connection{
+						"rabbit_notes_create": {
+							Name:          "rabbit_notes_create",
+							Type:          operation.ConnectionTypeRabbitMQ,
+							Address:       "amqp://user:password@localhost:1234/",
+							Queue:         "notes",
+							RoutingKey:    "create",
+							InsertTimeout: 1,
+							ReadTimeout:   1,
 						},
 					},
 				},

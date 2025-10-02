@@ -91,10 +91,8 @@ func New(opts ...RepoOption) (*Repo, error) {
 	return r, nil
 }
 
-func (db *Repo) Close() {
-	if err := db.db.Close(); err != nil {
-		logrus.Errorf("error on closing space repo: %v", err)
-	}
+func (db *Repo) Close() error {
+	return db.db.Close()
 }
 
 func (db *Repo) BeginTx(ctx context.Context, id string) error {
@@ -152,5 +150,9 @@ func (db *Repo) Rollback(ctx context.Context, id string) error {
 
 	delete(db.transaction.tx, id)
 
+	return nil
+}
+
+func (db *Repo) Exec(ctx context.Context) error {
 	return nil
 }
