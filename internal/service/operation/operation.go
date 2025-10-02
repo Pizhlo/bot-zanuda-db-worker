@@ -11,42 +11,49 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type OperationService struct {
-	cfg        *operation.Operation    // конфигурация операции
-	connection worker.Worker           // соединение для получения сообщений
-	storages   []storage.StorageDriver // драйвера для работы с хранилищами
+// Service - сервис для выполнения операций.
+type Service struct {
+	cfg        *operation.Operation // конфигурация операции
+	connection worker.Worker        // соединение для получения сообщений
+	storages   []storage.Driver     // драйвера для работы с хранилищами
 	msgChan    chan interfaces.Message
 	quitChan   chan struct{}
 }
 
-type option func(*OperationService)
+// option определяет опции для сервиса.
+type option func(*Service)
 
-func WithStorages(storages []storage.StorageDriver) option {
-	return func(s *OperationService) {
+// WithStorages устанавливает драйвера для работы с хранилищами.
+func WithStorages(storages []storage.Driver) option {
+	return func(s *Service) {
 		s.storages = storages
 	}
 }
 
+// WithCfg устанавливает конфигурацию операции.
 func WithCfg(cfg *operation.Operation) option {
-	return func(s *OperationService) {
+	return func(s *Service) {
 		s.cfg = cfg
 	}
 }
 
+// WithConnection устанавливает соединение для получения сообщений.
 func WithConnection(connection worker.Worker) option {
-	return func(s *OperationService) {
+	return func(s *Service) {
 		s.connection = connection
 	}
 }
 
+// WithMsgChan устанавливает канал для получения сообщений.
 func WithMsgChan(msgChan chan interfaces.Message) option {
-	return func(s *OperationService) {
+	return func(s *Service) {
 		s.msgChan = msgChan
 	}
 }
 
-func New(opts ...option) (*OperationService, error) {
-	s := &OperationService{}
+// New создает новый экземпляр сервиса.
+func New(opts ...option) (*Service, error) {
+	s := &Service{}
 
 	for _, opt := range opts {
 		opt(s)
@@ -73,13 +80,14 @@ func New(opts ...option) (*OperationService, error) {
 	return s, nil
 }
 
-func (s *OperationService) Run(ctx context.Context) error {
+// Run запускает сервис.
+func (s *Service) Run(ctx context.Context) error {
 	go s.readMessages(ctx)
 
 	return nil
 }
 
-func (s *OperationService) readMessages(ctx context.Context) {
+func (s *Service) readMessages(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -91,11 +99,11 @@ func (s *OperationService) readMessages(ctx context.Context) {
 		case msg := <-s.msgChan:
 			logrus.Debugf("operation: received message: %+v", msg)
 		}
-
 	}
 }
 
-func (s *OperationService) Close() error {
+// Close закрывает сервис.
+func (s *Service) Close() error {
 	logrus.Debugf("operation: closing")
 
 	close(s.quitChan)

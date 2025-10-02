@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// SaveNotes создает заметки.
 func (s *UnitOfWork) SaveNotes(ctx context.Context, notes []interfaces.Message) {
 	id := random.String(10)
 
@@ -46,6 +47,7 @@ func (s *UnitOfWork) SaveNotes(ctx context.Context, notes []interfaces.Message) 
 	}
 }
 
+// execWithRollback выполняет запрос с откатом.
 func (s *UnitOfWork) execWithRollback(ctx context.Context, id string, fn func() error) error {
 	if err := fn(); err != nil {
 		rbErr := s.Rollback(ctx, id, err)

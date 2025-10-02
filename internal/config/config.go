@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Postgres - конфигурация PostgreSQL.
 type Postgres struct {
 	Host          string `yaml:"host" validate:"required"`
 	Port          int    `yaml:"port" validate:"required,min=1024,max=65535"`
@@ -20,6 +21,7 @@ type Postgres struct {
 	ReadTimeout   int    `yaml:"read_timeout" validate:"required,min=1"`
 }
 
+// Config - конфигурация.
 type Config struct {
 	LogLevel   string `yaml:"log_level" validate:"required,oneof=debug info warn error"`
 	InstanceID int    `yaml:"instance_id" validate:"required,min=1"`
@@ -32,11 +34,12 @@ type Config struct {
 	Operations operation.OperationConfig
 }
 
+// LoadConfig загружает конфигурацию.
 func LoadConfig(path string) (*Config, error) {
 	cfg := &Config{}
 
 	// Читаем YAML файл
-	yamlFile, err := os.ReadFile(path)
+	yamlFile, err := os.ReadFile(path) //nolint:gosec // заведена задача BZ-17
 	if err != nil {
 		return nil, fmt.Errorf("config: error read file: %w", err)
 	}
@@ -49,6 +52,7 @@ func LoadConfig(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// LoadOperationConfig загружает конфигурацию операций.
 func (cfg *Config) LoadOperationConfig(path string) error {
 	operations, err := operation.LoadOperation(path)
 	if err != nil {
@@ -60,7 +64,7 @@ func (cfg *Config) LoadOperationConfig(path string) error {
 	return nil
 }
 
-// Валидируем конфиг
+// Validate валидирует конфиг.
 func (cfg *Config) Validate() error {
 	// Создаем валидатор
 	validate := validator.New()
@@ -73,7 +77,7 @@ func (cfg *Config) Validate() error {
 	return validate.Struct(cfg)
 }
 
-// ValidateRabbitMQAddress implements validator.Func
+// ValidateRabbitMQAddress implements validator.Func.
 func ValidateRabbitMQAddress(fl validator.FieldLevel) bool {
 	return strings.HasPrefix(fl.Field().String(), "amqp://")
 }

@@ -44,6 +44,7 @@ func (s *Worker) readMessages(ctx context.Context, msgs <-chan amqp.Delivery) {
 			logrus.Debugf("rabbit: received message: %s", string(msg.Body))
 
 			var mapMsg map[string]interface{}
+
 			err := json.Unmarshal(msg.Body, &mapMsg)
 			if err != nil {
 				logrus.Errorf("rabbit: error marshal message: %+v", err)

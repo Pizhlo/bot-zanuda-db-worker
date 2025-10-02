@@ -9,18 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:funlen // это тест
 func TestNew(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name    string
-		opts    []RabbitOption
+		opts    []Option
 		want    *Worker
 		wantErr require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithName("test"),
 				WithAddress("test"),
 				WithExchange("test"),
@@ -53,7 +54,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: read timeout is 0",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithName("test"),
 				WithAddress("test"),
 				WithExchange("test"),
@@ -64,7 +65,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: insert timeout is 0",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithName("test"),
 				WithAddress("test"),
 				WithExchange("test"),
@@ -75,7 +76,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: name is empty",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithAddress("test"),
 				WithExchange("test"),
 				WithRoutingKey("test"),
@@ -86,7 +87,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: address is empty",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithName("test"),
 				WithExchange("test"),
 				WithRoutingKey("test"),
@@ -97,7 +98,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: exchange is empty",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithName("test"),
 				WithAddress("test"),
 				WithRoutingKey("test"),
@@ -108,7 +109,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: routing key is empty",
-			opts: []RabbitOption{
+			opts: []Option{
 				WithName("test"),
 				WithAddress("test"),
 				WithExchange("test"),
@@ -121,6 +122,8 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := New(tt.opts...)
 			tt.wantErr(t, err)
 

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:funlen // это тест
 func TestLoadConfig(t *testing.T) {
 	t.Parallel()
 

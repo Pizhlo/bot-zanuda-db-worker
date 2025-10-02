@@ -2,7 +2,8 @@ package storage
 
 import "context"
 
-type StorageDriver interface {
+// Driver определяет интерфейс для работы с хранилищем.
+type Driver interface {
 	Exec(ctx context.Context) error
 	Close() error
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:funlen // это тест
 func TestLoadOperation(t *testing.T) {
 	t.Parallel()
 
@@ -116,6 +117,7 @@ func TestLoadOperation(t *testing.T) {
 	}
 }
 
+//nolint:funlen // это тест
 func TestMapStorages(t *testing.T) {
 	t.Parallel()
 
@@ -198,6 +200,7 @@ func TestMapStorages(t *testing.T) {
 	assert.Equal(t, expected, op.StoragesMap)
 }
 
+//nolint:funlen // это тест
 func TestMapConnections(t *testing.T) {
 	t.Parallel()
 
