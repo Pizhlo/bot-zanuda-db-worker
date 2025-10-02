@@ -12,6 +12,12 @@ install-linters:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	@echo "> golangci-lint installed successfully"
 	golangci-lint --version
+	
+	@echo "> installing staticcheck"
+	go install honnef.co/go/tools/cmd/staticcheck@latest
+	@echo "> staticcheck installed successfully"
+	staticcheck --version
+	
 	@echo "> linters installed successfully"
 
 lint:
