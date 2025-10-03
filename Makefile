@@ -1,10 +1,18 @@
+# заглушает вывод make
+MAKEFLAGS+=silent
+
 mocks:
+	@echo "> generating mocks..."
 	go generate ./...
+	@echo "> mocks generated successfully"
 
 swag:
+	@echo "> generating swagger documentation..."
 	swag init --md ./docs --parseInternal  --parseDependency --parseDepth 2 
+	@echo "> swagger documentation generated successfully"
 
 init:
+	@echo "> initializing..."
 	@make install-linters
 
 install-linters:
@@ -33,10 +41,8 @@ test:
 	@echo "> successfully finished"
 
 all:	
-	@echo "> linting..."
-	make lint
-	@echo "> testing..."
-	make test
+	@make lint
+	@make test
 
 run:
 	@echo "> running..."
