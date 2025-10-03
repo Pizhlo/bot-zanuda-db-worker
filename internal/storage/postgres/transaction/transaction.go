@@ -48,7 +48,7 @@ package transaction
 
 // 		data, err := json.Marshal(model)
 // 		if err != nil {
-// 			return fmt.Errorf("error marshalling model: %w", err)
+// 			return fmt.Errorf("error marshaling model: %w", err)
 // 		}
 
 // 		_, err = stmt.ExecContext(ctx, note.GetRequestID(), "notes", data, note.GetOperation(), id)

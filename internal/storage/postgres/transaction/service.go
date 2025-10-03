@@ -11,7 +11,7 @@ import (
 	"github.com/simukti/sqldb-logger/logadapter/logrusadapter"
 	"github.com/sirupsen/logrus"
 
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // postgres driver
 )
 
 // Repo сохраняет результаты выполнения транзакции в базу данных.
@@ -29,33 +29,39 @@ type Repo struct {
 	}
 }
 
+// RepoOption определяет опции для репозитория.
 type RepoOption func(*Repo)
 
+// WithAddr устанавливает адрес базы данных.
 func WithAddr(addr string) RepoOption {
 	return func(r *Repo) {
 		r.addr = addr
 	}
 }
 
+// WithInsertTimeout устанавливает время ожидания вставки.
 func WithInsertTimeout(insertTimeout int) RepoOption {
 	return func(c *Repo) {
 		c.insertTimeout = insertTimeout
 	}
 }
 
+// WithReadTimeout устанавливает время ожидания чтения.
 func WithReadTimeout(readTimeout int) RepoOption {
 	return func(c *Repo) {
 		c.readTimeout = readTimeout
 	}
 }
 
+// WithInstanceID устанавливает идентификатор экземпляра.
 func WithInstanceID(instanceID int) RepoOption {
 	return func(c *Repo) {
 		c.instanceID = instanceID
 	}
 }
 
-func New(opts ...RepoOption) (*Repo, error) {
+// New создает новый репозиторий.
+func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	r := &Repo{}
 
 	for _, opt := range opts {
@@ -88,7 +94,8 @@ func New(opts ...RepoOption) (*Repo, error) {
 	logger.Formatter = &logrus.JSONFormatter{} // logrus automatically add time field
 
 	db = sqldblogger.OpenDriver(r.addr, db.Driver(), logrusadapter.New(logger))
-	err = db.Ping()
+
+	err = db.PingContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to a db: %w", err)
 	} // to check connectivity and DSN correctness
@@ -103,12 +110,14 @@ func New(opts ...RepoOption) (*Repo, error) {
 	return r, nil
 }
 
+// Close закрывает репозиторий.
 func (db *Repo) Close() {
 	if err := db.db.Close(); err != nil {
 		logrus.Errorf("error on closing space repo: %v", err)
 	}
 }
 
+// BeginTx начинает транзакцию.
 func (db *Repo) BeginTx(ctx context.Context, id string) error {
 	if _, err := db.getTx(id); err == nil {
 		return nil
@@ -123,6 +132,7 @@ func (db *Repo) BeginTx(ctx context.Context, id string) error {
 	}
 
 	db.transaction.tx[id] = tx
+
 	return nil
 }
 
@@ -154,6 +164,7 @@ func (db *Repo) getTx(id string) (*sql.Tx, error) {
 	return tx, nil
 }
 
+// Commit коммитит транзакцию.
 func (db *Repo) Commit(ctx context.Context, id string) error {
 	db.transaction.mu.Lock()
 	defer db.transaction.mu.Unlock()
@@ -168,6 +179,7 @@ func (db *Repo) Commit(ctx context.Context, id string) error {
 	return nil
 }
 
+// Rollback откатывает транзакцию.
 func (db *Repo) Rollback(ctx context.Context, id string) error {
 	db.transaction.mu.Lock()
 	defer db.transaction.mu.Unlock()

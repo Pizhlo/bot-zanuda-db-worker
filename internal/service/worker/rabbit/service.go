@@ -8,6 +8,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// Worker соединение с RabbitMQ.
 type Worker struct {
 	config struct {
 		address string
@@ -30,45 +31,53 @@ type Worker struct {
 	readTimeout   int
 }
 
-type RabbitOption func(*Worker)
+// Option определяет опции для Worker.
+type Option func(*Worker)
 
-func WithName(name string) RabbitOption {
+// WithName устанавливает имя соединения.
+func WithName(name string) Option {
 	return func(w *Worker) {
 		w.config.name = name
 	}
 }
 
-func WithAddress(address string) RabbitOption {
+// WithAddress устанавливает адрес соединения.
+func WithAddress(address string) Option {
 	return func(w *Worker) {
 		w.config.address = address
 	}
 }
 
-func WithExchange(exchange string) RabbitOption {
+// WithExchange устанавливает exchange.
+func WithExchange(exchange string) Option {
 	return func(w *Worker) {
 		w.config.exchange = exchange
 	}
 }
 
-func WithRoutingKey(routingKey string) RabbitOption {
+// WithRoutingKey устанавливает routing key.
+func WithRoutingKey(routingKey string) Option {
 	return func(w *Worker) {
 		w.config.routingKey = routingKey
 	}
 }
 
-func WithInsertTimeout(insertTimeout int) RabbitOption {
+// WithInsertTimeout устанавливает время ожидания вставки.
+func WithInsertTimeout(insertTimeout int) Option {
 	return func(w *Worker) {
 		w.insertTimeout = insertTimeout
 	}
 }
 
-func WithReadTimeout(readTimeout int) RabbitOption {
+// WithReadTimeout устанавливает время ожидания чтения.
+func WithReadTimeout(readTimeout int) Option {
 	return func(w *Worker) {
 		w.readTimeout = readTimeout
 	}
 }
 
-func New(opts ...RabbitOption) (*Worker, error) {
+// New создает новый экземпляр Worker.
+func New(opts ...Option) (*Worker, error) {
 	w := &Worker{}
 
 	for _, opt := range opts {
@@ -105,6 +114,7 @@ func New(opts ...RabbitOption) (*Worker, error) {
 	return w, nil
 }
 
+// Connect соединяется с RabbitMQ.
 func (s *Worker) Connect() error {
 	conn, err := amqp.Dial(s.config.address)
 	if err != nil {
@@ -164,14 +174,17 @@ func (s *Worker) Connect() error {
 	return nil
 }
 
+// Name возвращает имя соединения.
 func (s *Worker) Name() string {
 	return s.config.name
 }
 
+// MsgChan возвращает канал для получения сообщений.
 func (s *Worker) MsgChan() chan interfaces.Message {
 	return s.msgChan
 }
 
+// Close закрывает соединение с RabbitMQ.
 func (s *Worker) Close() error {
 	err := s.channel.Close()
 	if err != nil {

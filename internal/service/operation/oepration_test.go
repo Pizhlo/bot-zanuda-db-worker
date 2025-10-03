@@ -23,6 +23,7 @@ func (m *mockStorage) Close() error {
 	return nil
 }
 
+//nolint:funlen // это тест
 func TestNew(t *testing.T) {
 	t.Parallel()
 
@@ -32,22 +33,22 @@ func TestNew(t *testing.T) {
 		name    string
 		opts    []option
 		wantErr require.ErrorAssertionFunc
-		want    *OperationService
+		want    *Service
 	}{
 		{
 			name: "positive case",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
 				WithConnection(&rabbit.Worker{}),
-				WithStorages([]storage.StorageDriver{
+				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
 				WithMsgChan(msgChan),
 			},
-			want: &OperationService{
+			want: &Service{
 				cfg:        &operation.Operation{},
 				connection: &rabbit.Worker{},
-				storages: []storage.StorageDriver{
+				storages: []storage.Driver{
 					&mockStorage{},
 				},
 				msgChan:  msgChan,
@@ -59,15 +60,15 @@ func TestNew(t *testing.T) {
 			name: "negative case: cfg is nil",
 			opts: []option{
 				WithConnection(&rabbit.Worker{}),
-				WithStorages([]storage.StorageDriver{
+				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
 				WithMsgChan(msgChan),
 			},
-			want: &OperationService{
+			want: &Service{
 				cfg:        &operation.Operation{},
 				connection: &rabbit.Worker{},
-				storages: []storage.StorageDriver{
+				storages: []storage.Driver{
 					&mockStorage{},
 				},
 				msgChan:  msgChan,
@@ -79,7 +80,7 @@ func TestNew(t *testing.T) {
 			name: "negative case: connection is nil",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
-				WithStorages([]storage.StorageDriver{
+				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
 				WithMsgChan(msgChan),
@@ -100,7 +101,7 @@ func TestNew(t *testing.T) {
 			opts: []option{
 				WithCfg(&operation.Operation{}),
 				WithConnection(&rabbit.Worker{}),
-				WithStorages([]storage.StorageDriver{
+				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
 			},
@@ -110,6 +111,8 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := New(tt.opts...)
 			tt.wantErr(t, err)
 
@@ -124,11 +127,11 @@ func TestNew(t *testing.T) {
 func TestClose(t *testing.T) {
 	t.Parallel()
 
-	op := &OperationService{
+	op := &Service{
 		quitChan: make(chan struct{}),
 	}
 
-	op.Close()
+	require.NoError(t, op.Close())
 
 	_, ok := <-op.quitChan
 	assert.False(t, ok)

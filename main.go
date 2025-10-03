@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+//nolint:gocognit // это точка входа в программу. Будет совершен рефактор (задача BZ-13).
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -34,6 +35,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
+
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
 
@@ -59,7 +61,6 @@ func main() {
 				logrus.Errorf("error closing operation %s: %+v", name, err)
 			}
 		}
-
 	}(&wg)
 
 	wg.Wait()

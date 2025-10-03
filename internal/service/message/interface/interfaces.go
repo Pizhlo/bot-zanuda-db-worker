@@ -1,3 +1,4 @@
+//nolint:revive // это интерфейсы для работы с сообщениями.
 package interfaces
 
 import (

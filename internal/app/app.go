@@ -7,7 +7,7 @@ import (
 	operation_srv "db-worker/internal/service/operation"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/service/worker/rabbit"
-	storage "db-worker/internal/storage"
+	"db-worker/internal/storage"
 	postgres "db-worker/internal/storage/postgres/repo"
 	"db-worker/internal/storage/postgres/transaction"
 	"fmt"
@@ -15,14 +15,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// App - главный экземпляр приложения.
 type App struct {
 	Cfg        *config.Config
 	Workers    map[string]worker.Worker
-	Storages   map[string]storage.StorageDriver
-	Operations map[string]*operation_srv.OperationService
+	Storages   map[string]storage.Driver
+	Operations map[string]*operation_srv.Service
 	TxSaver    *transaction.Repo
 }
 
+// NewApp создает новый экземпляр App.
 func NewApp(ctx context.Context, configPath string, operationConfigPath string) (*App, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -42,14 +44,14 @@ func NewApp(ctx context.Context, configPath string, operationConfigPath string) 
 		return nil, fmt.Errorf("error validating config: %w", err)
 	}
 
-	txSaver := initTxSaver(cfg)
+	txSaver := initTxSaver(ctx, cfg)
 
 	connections, err := initWorkers(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing workers: %w", err)
 	}
 
-	storagesMap, err := initStoragesMap(cfg)
+	storagesMap, err := initStoragesMap(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing storages map: %w", err)
 	}
@@ -68,10 +70,10 @@ func NewApp(ctx context.Context, configPath string, operationConfigPath string) 
 	}, nil
 }
 
-func initTxSaver(cfg *config.Config) *transaction.Repo {
+func initTxSaver(ctx context.Context, cfg *config.Config) *transaction.Repo {
 	addr := formatPostgresAddr(cfg.Storage.Postgres)
 
-	txSaver := start(transaction.New(transaction.WithAddr(addr),
+	txSaver := start(transaction.New(ctx, transaction.WithAddr(addr),
 		transaction.WithInsertTimeout(cfg.Storage.Postgres.InsertTimeout),
 		transaction.WithReadTimeout(cfg.Storage.Postgres.ReadTimeout),
 		transaction.WithInstanceID(cfg.InstanceID),
@@ -91,7 +93,7 @@ func setLogLevel(level string) {
 	logrus.Infof("set log level: %+v", logrus.GetLevel())
 }
 
-// создает подключения из списка подключений. Сохраняет в map[string]*rabbit.Worker
+// создает подключения из списка подключений. Сохраняет в map[string]*rabbit.Worker.
 func initWorkers(ctx context.Context, cfg *config.Config) (map[string]worker.Worker, error) {
 	connections := make(map[string]worker.Worker)
 
@@ -115,12 +117,12 @@ func initWorker(ctx context.Context, worker operation.Connection) (worker.Worker
 	}
 }
 
-func initStoragesMap(cfg *config.Config) (map[string]storage.StorageDriver, error) {
-	storagesMap := make(map[string]storage.StorageDriver)
+func initStoragesMap(ctx context.Context, cfg *config.Config) (map[string]storage.Driver, error) {
+	storagesMap := make(map[string]storage.Driver)
 
 	var err error
 	for _, storage := range cfg.Operations.Storages {
-		storagesMap[storage.Name], err = initStorage(storage)
+		storagesMap[storage.Name], err = initStorage(ctx, storage)
 		if err != nil {
 			return nil, fmt.Errorf("error initializing storage %s: %w", storage.Name, err)
 		}
@@ -129,10 +131,10 @@ func initStoragesMap(cfg *config.Config) (map[string]storage.StorageDriver, erro
 	return storagesMap, nil
 }
 
-func initStorage(storage operation.Storage) (storage.StorageDriver, error) {
+func initStorage(ctx context.Context, storage operation.Storage) (storage.Driver, error) {
 	switch storage.Type {
 	case operation.StorageTypePostgres:
-		return initPostgresStorage(config.Postgres{
+		return initPostgresStorage(ctx, config.Postgres{
 			Host:          storage.Host,
 			Port:          storage.Port,
 			User:          storage.User,
@@ -146,10 +148,10 @@ func initStorage(storage operation.Storage) (storage.StorageDriver, error) {
 	}
 }
 
-func initPostgresStorage(cfg config.Postgres) storage.StorageDriver {
+func initPostgresStorage(ctx context.Context, cfg config.Postgres) storage.Driver {
 	addr := formatPostgresAddr(cfg)
 
-	return start(postgres.New(postgres.WithAddr(addr),
+	return start(postgres.New(ctx, postgres.WithAddr(addr),
 		postgres.WithInsertTimeout(cfg.InsertTimeout),
 		postgres.WithReadTimeout(cfg.ReadTimeout),
 		postgres.WithInsertTimeout(cfg.InsertTimeout),
@@ -181,8 +183,8 @@ func initRabbit(ctx context.Context, connection operation.Connection) worker.Wor
 	return rabbit
 }
 
-func initOperationServices(ctx context.Context, cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.StorageDriver) (map[string]*operation_srv.OperationService, error) {
-	operations := make(map[string]*operation_srv.OperationService, len(cfg.Operations.Operations))
+func initOperationServices(ctx context.Context, cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver) (map[string]*operation_srv.Service, error) {
+	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
 	for _, operationCfg := range cfg.Operations.Operations {
 		conn, ok := connections[operationCfg.Request.From]
@@ -203,8 +205,8 @@ func initOperationServices(ctx context.Context, cfg *config.Config, connections 
 	return operations, nil
 }
 
-func groupStorages(storagesCfg []operation.Storage, storagesMap map[string]storage.StorageDriver) ([]storage.StorageDriver, error) {
-	storages := make([]storage.StorageDriver, len(storagesCfg))
+func groupStorages(storagesCfg []operation.Storage, storagesMap map[string]storage.Driver) ([]storage.Driver, error) {
+	storages := make([]storage.Driver, len(storagesCfg))
 
 	for i, storageCfg := range storagesCfg {
 		storage, ok := storagesMap[storageCfg.Name]
@@ -218,7 +220,7 @@ func groupStorages(storagesCfg []operation.Storage, storagesMap map[string]stora
 	return storages, nil
 }
 
-func initOperation(ctx context.Context, operationCfg operation.Operation, connection worker.Worker, storages []storage.StorageDriver) *operation_srv.OperationService {
+func initOperation(ctx context.Context, operationCfg operation.Operation, connection worker.Worker, storages []storage.Driver) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
 		operation_srv.WithConnection(connection),

@@ -20,14 +20,11 @@ jobs:
         - name: Run go vet
           run: go vet ./...
 
-        - name: Install staticcheck
-          run: go install honnef.co/go/tools/cmd/staticcheck@latest
+        - name: Install linters
+          run: make install-linters
 
-        - name: Run staticcheck
-          run: staticcheck ./...
-
-        - name: Install golangci-lint
-          run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        - name: Run linters
+          run: make lint
 
     test:
         runs-on: ubuntu-latest

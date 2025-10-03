@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// noteRepo определяет интерфейс для работы с заметками
+// noteRepo определяет интерфейс для работы с заметками.
 type noteRepo interface {
 	repo
 	UpdateNotes(ctx context.Context, id string, notes []interfaces.Message) error
@@ -45,14 +45,17 @@ type UnitOfWork struct {
 	transactions map[string]struct{}
 }
 
+// UnitOfWorkOption определяет опции для UnitOfWork.
 type UnitOfWorkOption func(*UnitOfWork)
 
+// WithPostgres устанавливает репозиторий для работы с заметками.
 func WithPostgres(postgres noteRepo) UnitOfWorkOption {
 	return func(uow *UnitOfWork) {
 		uow.Repos.Postgres = postgres
 	}
 }
 
+// WithTxRepo устанавливает репозиторий для работы с транзакциями.
 func WithTxRepo(txRepo transactionRepo) UnitOfWorkOption {
 	return func(uow *UnitOfWork) {
 		uow.Repos.TxRepo = txRepo
@@ -80,6 +83,7 @@ func NewUnitOfWork(opts ...UnitOfWorkOption) (*UnitOfWork, error) {
 	return uow, nil
 }
 
+// Begin начинает транзакцию.
 func (uow *UnitOfWork) Begin(ctx context.Context, id string) error {
 	uow.mu.Lock()
 	defer uow.mu.Unlock()
@@ -102,6 +106,7 @@ func (uow *UnitOfWork) Begin(ctx context.Context, id string) error {
 	return nil
 }
 
+// Commit коммитит транзакцию.
 func (uow *UnitOfWork) Commit(ctx context.Context, id string) error {
 	uow.mu.Lock()
 	defer uow.mu.Unlock()
@@ -129,6 +134,7 @@ func (uow *UnitOfWork) Commit(ctx context.Context, id string) error {
 	return nil
 }
 
+// Rollback откатывает транзакцию.
 func (uow *UnitOfWork) Rollback(ctx context.Context, id string, theErr error) error {
 	uow.mu.Lock()
 	defer uow.mu.Unlock()
@@ -154,6 +160,7 @@ func (uow *UnitOfWork) Rollback(ctx context.Context, id string, theErr error) er
 	return nil
 }
 
+// Close закрывает UnitOfWork.
 func (uow *UnitOfWork) Close() {
 	uow.Repos.Postgres.Close()
 	uow.Repos.TxRepo.Close()
