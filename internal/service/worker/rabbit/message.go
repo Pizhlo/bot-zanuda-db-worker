@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 
 	"github.com/sirupsen/logrus"
-	"github.com/streadway/amqp"
 )
 
-// Run - горутина для чтения очереди.
-func (s *Worker) Run(ctx context.Context) error {
+func (s *Worker) connectChannel() error {
 	msgs, err := s.channel.Consume(
 		s.queue.Name, // queue
 		"",           // consumer
@@ -24,36 +22,51 @@ func (s *Worker) Run(ctx context.Context) error {
 		return err
 	}
 
-	logrus.Infof("rabbit: start consume messages from %s", s.queue.Name)
-
-	go s.readMessages(ctx, msgs)
+	s.msgs = msgs
 
 	return nil
 }
 
-func (s *Worker) readMessages(ctx context.Context, msgs <-chan amqp.Delivery) {
+// Run запускает чтение сообщений из очереди.
+func (s *Worker) Run(ctx context.Context) error {
+	logrus.WithFields(logrus.Fields{
+		"queue": s.queue.Name,
+	}).Info("rabbit: start consume messages")
+
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("rabbit: stop consume messages from %s", s.queue.Name)
-			return
+			logrus.WithFields(logrus.Fields{
+				"queue": s.queue.Name,
+			}).Info("rabbit: ctx done: stop consume messages")
+
+			return nil
+
 		case <-s.quitChan:
-			logrus.Infof("rabbit: stop consume messages from %s", s.queue.Name)
-			return
-		case msg := <-msgs:
-			logrus.Debugf("rabbit: received message: %s", string(msg.Body))
+			logrus.WithFields(logrus.Fields{
+				"queue": s.queue.Name,
+			}).Info("rabbit: quit chan: stop consume messages")
+
+			return nil
+
+		case msg := <-s.msgs:
+			logrus.WithFields(logrus.Fields{
+				"message": string(msg.Body),
+			}).Debug("rabbit: received message")
 
 			var mapMsg map[string]interface{}
 
 			err := json.Unmarshal(msg.Body, &mapMsg)
 			if err != nil {
-				logrus.Errorf("rabbit: error marshal message: %+v", err)
+				logrus.WithError(err).Error("rabbit: error marshal message")
 				continue
 			}
 
 			s.msgChan <- interfaces.Message(mapMsg)
 
-			logrus.Debugf("rabbit: sent message to channel: %+v", mapMsg)
+			logrus.WithFields(logrus.Fields{
+				"message": mapMsg,
+			}).Debug("rabbit: sent message to channel")
 		}
 	}
 }

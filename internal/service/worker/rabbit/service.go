@@ -1,6 +1,7 @@
 package rabbit
 
 import (
+	"context"
 	interfaces "db-worker/internal/service/message/interface"
 	"fmt"
 
@@ -20,6 +21,8 @@ type Worker struct {
 
 	msgChan  chan interfaces.Message
 	quitChan chan struct{}
+
+	msgs <-chan amqp.Delivery
 
 	// queues
 	queue amqp.Queue
@@ -116,6 +119,20 @@ func New(opts ...Option) (*Worker, error) {
 
 // Connect соединяется с RabbitMQ.
 func (s *Worker) Connect() error {
+	err := s.connectQueue()
+	if err != nil {
+		return fmt.Errorf("rabbit: error connecting queue: %w", err)
+	}
+
+	err = s.connectChannel()
+	if err != nil {
+		return fmt.Errorf("rabbit: error connecting channel: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Worker) connectQueue() error {
 	conn, err := amqp.Dial(s.config.address)
 	if err != nil {
 		return fmt.Errorf("rabbit: error creating connection: %w", err)
@@ -169,7 +186,14 @@ func (s *Worker) Connect() error {
 		return fmt.Errorf("error binding queue to exchange: %w", err)
 	}
 
-	logrus.Infof("successfully connected rabbit on %s", s.config.address)
+	logrus.WithFields(logrus.Fields{
+		"address":        s.config.address,
+		"name":           s.config.name,
+		"exchange":       s.config.exchange,
+		"routing_key":    s.config.routingKey,
+		"insert_timeout": s.insertTimeout,
+		"read_timeout":   s.readTimeout,
+	}).Info("successfully connected rabbit")
 
 	return nil
 }
@@ -184,8 +208,8 @@ func (s *Worker) MsgChan() chan interfaces.Message {
 	return s.msgChan
 }
 
-// Close закрывает соединение с RabbitMQ.
-func (s *Worker) Close() error {
+// Stop закрывает соединение с RabbitMQ.
+func (s *Worker) Stop(_ context.Context) error {
 	err := s.channel.Close()
 	if err != nil {
 		logrus.Errorf("worker: error closing channel rabbit mq: %+v", err)
