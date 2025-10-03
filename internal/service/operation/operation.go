@@ -88,6 +88,10 @@ func (s *Service) Run(ctx context.Context) error {
 }
 
 func (s *Service) readMessages(ctx context.Context) {
+	logrus.WithFields(logrus.Fields{
+		"name": s.cfg.Name,
+	}).Info("operation: start read messages")
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -102,8 +106,8 @@ func (s *Service) readMessages(ctx context.Context) {
 	}
 }
 
-// Close закрывает сервис.
-func (s *Service) Close() error {
+// Stop закрывает сервис.
+func (s *Service) Stop(_ context.Context) error {
 	logrus.Debugf("operation: closing")
 
 	close(s.quitChan)

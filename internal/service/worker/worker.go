@@ -10,6 +10,6 @@ import (
 type Worker interface {
 	Name() string
 	Run(ctx context.Context) error
-	Close() error
+	Stop(ctx context.Context) error
 	MsgChan() chan interfaces.Message
 }

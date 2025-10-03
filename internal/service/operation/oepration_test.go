@@ -4,7 +4,6 @@ import (
 	"context"
 	"db-worker/internal/config/operation"
 	interfaces "db-worker/internal/service/message/interface"
-	"db-worker/internal/service/worker/rabbit"
 	"db-worker/internal/storage"
 	"testing"
 
@@ -15,12 +14,32 @@ import (
 type mockStorage struct {
 }
 
+func (m *mockStorage) Run(_ context.Context) error {
+	return nil
+}
+
 func (m *mockStorage) Exec(_ context.Context) error {
 	return nil
 }
 
-func (m *mockStorage) Close() error {
+func (m *mockStorage) Stop(_ context.Context) error {
 	return nil
+}
+
+type mockWorker struct {
+}
+
+func (m *mockWorker) Name() string {
+	return "mockWorker"
+}
+func (m *mockWorker) Run(ctx context.Context) error {
+	return nil
+}
+func (m *mockWorker) Stop(_ context.Context) error {
+	return nil
+}
+func (m *mockWorker) MsgChan() chan interfaces.Message {
+	return make(chan interfaces.Message)
 }
 
 //nolint:funlen // это тест
@@ -39,7 +58,7 @@ func TestNew(t *testing.T) {
 			name: "positive case",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
-				WithConnection(&rabbit.Worker{}),
+				WithConnection(&mockWorker{}),
 				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
@@ -47,7 +66,7 @@ func TestNew(t *testing.T) {
 			},
 			want: &Service{
 				cfg:        &operation.Operation{},
-				connection: &rabbit.Worker{},
+				connection: &mockWorker{},
 				storages: []storage.Driver{
 					&mockStorage{},
 				},
@@ -59,7 +78,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "negative case: cfg is nil",
 			opts: []option{
-				WithConnection(&rabbit.Worker{}),
+				WithConnection(&mockWorker{}),
 				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
@@ -67,7 +86,7 @@ func TestNew(t *testing.T) {
 			},
 			want: &Service{
 				cfg:        &operation.Operation{},
-				connection: &rabbit.Worker{},
+				connection: &mockWorker{},
 				storages: []storage.Driver{
 					&mockStorage{},
 				},
@@ -91,7 +110,7 @@ func TestNew(t *testing.T) {
 			name: "negative case: storages are nil",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
-				WithConnection(&rabbit.Worker{}),
+				WithConnection(&mockWorker{}),
 				WithMsgChan(msgChan),
 			},
 			wantErr: require.Error,
@@ -100,7 +119,7 @@ func TestNew(t *testing.T) {
 			name: "negative case: message channel is nil",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
-				WithConnection(&rabbit.Worker{}),
+				WithConnection(&mockWorker{}),
 				WithStorages([]storage.Driver{
 					&mockStorage{},
 				}),
@@ -124,14 +143,14 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestClose(t *testing.T) {
+func TestStop(t *testing.T) {
 	t.Parallel()
 
 	op := &Service{
 		quitChan: make(chan struct{}),
 	}
 
-	require.NoError(t, op.Close())
+	require.NoError(t, op.Stop(context.Background()))
 
 	_, ok := <-op.quitChan
 	assert.False(t, ok)

@@ -83,11 +83,6 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 
 	db = sqldblogger.OpenDriver(r.addr, db.Driver(), logrusadapter.New(logger) /*, using_default_options*/) // db is STILL *sql.DB
 
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot connect to a db: %w", err)
-	} // to check connectivity and DSN correctness
-
 	r.transaction = struct {
 		mu sync.Mutex
 		tx map[string]*sql.Tx
@@ -98,9 +93,22 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	return r, nil
 }
 
-// Close закрывает репозиторий.
-func (db *Repo) Close() error {
+// Stop закрывает репозиторий.
+func (db *Repo) Stop(_ context.Context) error {
 	return db.db.Close()
+}
+
+// Run запускает репозиторий.
+func (db *Repo) Run(ctx context.Context) error {
+	if err := db.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("error pinging db: %w", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"addr": db.addr,
+	}).Info("successfully connected postgres")
+
+	return nil
 }
 
 // BeginTx начинает транзакцию.
