@@ -107,12 +107,14 @@ const (
 	FieldTypeFloat64 FieldType = "float64"
 	// FieldTypeBool - логическое значение.
 	FieldTypeBool FieldType = "bool"
+	// FieldTypeUUID - UUID.
+	FieldTypeUUID FieldType = "uuid"
 )
 
 // Field - поле сообщения.
 type Field struct {
 	Name     string    `yaml:"name"`
-	Type     FieldType `yaml:"type" validate:"required,oneof=string int64 float64 bool"`
+	Type     FieldType `yaml:"type" validate:"required,oneof=string int64 float64 bool uuid"`
 	Required bool      `yaml:"required"`
 }
 

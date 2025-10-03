@@ -2,7 +2,6 @@ package rabbit
 
 import (
 	"context"
-	interfaces "db-worker/internal/service/message/interface"
 	"encoding/json"
 
 	"github.com/sirupsen/logrus"
@@ -30,28 +29,33 @@ func (s *Worker) connectChannel() error {
 // Run запускает чтение сообщений из очереди.
 func (s *Worker) Run(ctx context.Context) error {
 	logrus.WithFields(logrus.Fields{
-		"queue": s.queue.Name,
+		"routing_key": s.config.routingKey,
+		"queue":       s.queue.Name,
 	}).Info("rabbit: start consume messages")
 
 	for {
 		select {
 		case <-ctx.Done():
 			logrus.WithFields(logrus.Fields{
-				"queue": s.queue.Name,
+				"routing_key": s.config.routingKey,
+				"queue":       s.queue.Name,
 			}).Info("rabbit: ctx done: stop consume messages")
 
 			return nil
 
 		case <-s.quitChan:
 			logrus.WithFields(logrus.Fields{
-				"queue": s.queue.Name,
+				"routing_key": s.config.routingKey,
+				"queue":       s.queue.Name,
 			}).Info("rabbit: quit chan: stop consume messages")
 
 			return nil
 
 		case msg := <-s.msgs:
 			logrus.WithFields(logrus.Fields{
-				"message": string(msg.Body),
+				"message":     string(msg.Body),
+				"routing_key": msg.RoutingKey,
+				"queue":       s.queue.Name,
 			}).Debug("rabbit: received message")
 
 			var mapMsg map[string]interface{}
@@ -62,11 +66,15 @@ func (s *Worker) Run(ctx context.Context) error {
 				continue
 			}
 
-			s.msgChan <- interfaces.Message(mapMsg)
+			go func() {
+				s.msgChan <- mapMsg
 
-			logrus.WithFields(logrus.Fields{
-				"message": mapMsg,
-			}).Debug("rabbit: sent message to channel")
+				logrus.WithFields(logrus.Fields{
+					"message":     string(msg.Body),
+					"routing_key": msg.RoutingKey,
+					"queue":       s.queue.Name,
+				}).Debug("rabbit: sent message to channel")
+			}()
 		}
 	}
 }

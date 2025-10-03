@@ -1,0 +1,64 @@
+package operation
+
+import (
+	"db-worker/internal/config/operation"
+	"db-worker/internal/service/validator"
+	"fmt"
+)
+
+func (s *Service) validateMessage(msg map[string]interface{}) error {
+	err := s.validateFields(msg)
+	if err != nil {
+		return fmt.Errorf("operation: error validate fields: %w", err)
+	}
+
+	err = s.validateFieldVals(msg)
+	if err != nil {
+		return fmt.Errorf("operation: error validate fields types: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) validateFields(msg map[string]interface{}) error {
+	visited := make(map[string]bool)
+
+	for _, field := range s.cfg.Fields {
+		if field.Required && msg[field.Name] == nil {
+			return fmt.Errorf("field %s is required", field.Name)
+		}
+
+		if visited[field.Name] {
+			continue
+		}
+
+		visited[field.Name] = true
+	}
+
+	if len(visited) != len(s.cfg.Fields) {
+		return fmt.Errorf("some fields are missing")
+	}
+
+	return nil
+}
+
+func (s *Service) validateFieldVals(msg map[string]interface{}) error {
+	for _, field := range s.cfg.Fields {
+		val, ok := msg[field.Name]
+		if !ok {
+			return fmt.Errorf("field %s is not found", field.Name)
+		}
+
+		if err := s.validateFieldVal(val, field); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) validateFieldVal(val any, field operation.Field) error {
+	v := validator.New().WithField(field).WithVal(val)
+
+	return v.Validate()
+}

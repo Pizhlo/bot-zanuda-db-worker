@@ -40,7 +40,7 @@ func main() {
 
 	logrus.WithField("level", logrus.GetLevel()).Info("set log level")
 
-	butler := NewButler(&ctx)
+	butler := NewButler()
 
 	logrus.WithFields(logrus.Fields{
 		"version": butler.BuildInfo.Version,
@@ -61,10 +61,11 @@ func main() {
 
 	for _, worker := range connections {
 		go butler.start(func() error {
+			startService(worker.Connect(), worker.Name())
 			return worker.Run(notifyCtx)
 		})
 
-		defer butler.stop(worker)
+		defer butler.stop(notifyCtx, worker)
 	}
 
 	storagesMap, err := initStoragesMap(notifyCtx, cfg)
@@ -77,7 +78,7 @@ func main() {
 			return storage.Run(notifyCtx)
 		})
 
-		defer butler.stop(storage)
+		defer butler.stop(notifyCtx, storage)
 	}
 
 	operations, err := initOperationServices(cfg, connections, storagesMap)
@@ -90,7 +91,7 @@ func main() {
 			return operation.Run(notifyCtx)
 		})
 
-		defer butler.stop(operation)
+		defer butler.stop(notifyCtx, operation)
 	}
 
 	logrus.Info("all services started")
@@ -142,13 +143,12 @@ func initRabbit(connection operation.Connection) worker.Worker {
 	rabbit := start(rabbit.New(
 		rabbit.WithAddress(connection.Address),
 		rabbit.WithName(connection.Name),
-		rabbit.WithExchange(connection.Queue),
+		rabbit.WithExchange("exchange"),
+		rabbit.WithQueue(connection.Queue),
 		rabbit.WithRoutingKey(connection.RoutingKey),
 		rabbit.WithInsertTimeout(connection.InsertTimeout),
 		rabbit.WithReadTimeout(connection.ReadTimeout),
 	))
-
-	startService(rabbit.Connect(), connection.Name)
 
 	return rabbit
 }
@@ -244,7 +244,6 @@ func groupStorages(storagesCfg []operation.Storage, storagesMap map[string]stora
 func initOperation(operationCfg operation.Operation, connection worker.Worker, storages []storage.Driver) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
-		operation_srv.WithConnection(connection),
 		operation_srv.WithStorages(storages),
 		operation_srv.WithMsgChan(connection.MsgChan()),
 	))

@@ -4,7 +4,7 @@ BUILD_DIR := $(CUR_DIR)/.build
 APP_EXECUTABLE_DIR := $(BUILD_DIR)/bin
 
 # заглушает вывод make
-MAKEFLAGS+=silent
+# MAKEFLAGS+=silent # временно отключено, пока не сделана задача BZ-26
 
 mocks:
 	@echo "> generating mocks..."

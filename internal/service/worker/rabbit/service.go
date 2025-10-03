@@ -2,7 +2,6 @@ package rabbit
 
 import (
 	"context"
-	interfaces "db-worker/internal/service/message/interface"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -16,10 +15,11 @@ type Worker struct {
 		name    string
 
 		exchange   string
+		queue      string
 		routingKey string
 	}
 
-	msgChan  chan interfaces.Message
+	msgChan  chan map[string]interface{}
 	quitChan chan struct{}
 
 	msgs <-chan amqp.Delivery
@@ -55,6 +55,13 @@ func WithAddress(address string) Option {
 func WithExchange(exchange string) Option {
 	return func(w *Worker) {
 		w.config.exchange = exchange
+	}
+}
+
+// WithQueue устанавливает имя очереди.
+func WithQueue(queue string) Option {
+	return func(w *Worker) {
+		w.config.queue = queue
 	}
 }
 
@@ -107,11 +114,15 @@ func New(opts ...Option) (*Worker, error) {
 		return nil, fmt.Errorf("rabbit: exchange is required")
 	}
 
+	if w.config.queue == "" {
+		return nil, fmt.Errorf("rabbit: queue is required")
+	}
+
 	if w.config.routingKey == "" {
 		return nil, fmt.Errorf("rabbit: routing key is required")
 	}
 
-	w.msgChan = make(chan interfaces.Message)
+	w.msgChan = make(chan map[string]interface{})
 	w.quitChan = make(chan struct{})
 
 	return w, nil
@@ -163,12 +174,12 @@ func (s *Worker) connectQueue() error {
 
 	// Создаем queue
 	s.queue, err = ch.QueueDeclare(
-		"notes_queue", // name
-		true,          // durable
-		false,         // delete when unused
-		false,         // exclusive
-		false,         // no-wait
-		nil,           // arguments
+		s.config.queue, // name
+		true,           // durable
+		false,          // delete when unused
+		false,          // exclusive
+		false,          // no-wait
+		nil,            // arguments
 	)
 	if err != nil {
 		return fmt.Errorf("error creating queue: %w", err)
@@ -190,6 +201,7 @@ func (s *Worker) connectQueue() error {
 		"address":        s.config.address,
 		"name":           s.config.name,
 		"exchange":       s.config.exchange,
+		"queue":          s.config.queue,
 		"routing_key":    s.config.routingKey,
 		"insert_timeout": s.insertTimeout,
 		"read_timeout":   s.readTimeout,
@@ -204,8 +216,33 @@ func (s *Worker) Name() string {
 }
 
 // MsgChan возвращает канал для получения сообщений.
-func (s *Worker) MsgChan() chan interfaces.Message {
+func (s *Worker) MsgChan() chan map[string]interface{} {
 	return s.msgChan
+}
+
+// Queue для соответствия интерфейсу Worker.
+func (s *Worker) Queue() string {
+	return s.config.queue
+}
+
+// RoutingKey для соответствия интерфейсу Worker.
+func (s *Worker) RoutingKey() string {
+	return s.config.routingKey
+}
+
+// InsertTimeout для соответствия интерфейсу Worker.
+func (s *Worker) InsertTimeout() int {
+	return s.insertTimeout
+}
+
+// ReadTimeout для соответствия интерфейсу Worker.
+func (s *Worker) ReadTimeout() int {
+	return s.readTimeout
+}
+
+// Address для соответствия интерфейсу Worker.
+func (s *Worker) Address() string {
+	return s.config.address
 }
 
 // Stop закрывает соединение с RabbitMQ.

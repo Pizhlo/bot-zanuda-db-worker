@@ -3,8 +3,6 @@ package operation
 import (
 	"context"
 	"db-worker/internal/config/operation"
-	interfaces "db-worker/internal/service/message/interface"
-	"db-worker/internal/service/worker"
 	"db-worker/internal/storage"
 	"errors"
 
@@ -13,11 +11,12 @@ import (
 
 // Service - сервис для выполнения операций.
 type Service struct {
-	cfg        *operation.Operation // конфигурация операции
-	connection worker.Worker        // соединение для получения сообщений
-	storages   []storage.Driver     // драйвера для работы с хранилищами
-	msgChan    chan interfaces.Message
-	quitChan   chan struct{}
+	cfg      *operation.Operation // конфигурация операции
+	storages []storage.Driver     // драйвера для работы с хранилищами
+	msgChan  chan map[string]interface{}
+	quitChan chan struct{}
+
+	mapFields map[string]operation.Field
 }
 
 // option определяет опции для сервиса.
@@ -37,15 +36,8 @@ func WithCfg(cfg *operation.Operation) option {
 	}
 }
 
-// WithConnection устанавливает соединение для получения сообщений.
-func WithConnection(connection worker.Worker) option {
-	return func(s *Service) {
-		s.connection = connection
-	}
-}
-
 // WithMsgChan устанавливает канал для получения сообщений.
-func WithMsgChan(msgChan chan interfaces.Message) option {
+func WithMsgChan(msgChan chan map[string]interface{}) option {
 	return func(s *Service) {
 		s.msgChan = msgChan
 	}
@@ -63,10 +55,6 @@ func New(opts ...option) (*Service, error) {
 		return nil, errors.New("cfg is required")
 	}
 
-	if s.connection == nil {
-		return nil, errors.New("connection is required")
-	}
-
 	if len(s.storages) == 0 {
 		return nil, errors.New("storages are required")
 	}
@@ -76,6 +64,11 @@ func New(opts ...option) (*Service, error) {
 	}
 
 	s.quitChan = make(chan struct{})
+	s.mapFields = make(map[string]operation.Field)
+
+	for _, field := range s.cfg.Fields {
+		s.mapFields[field.Name] = field
+	}
 
 	return s, nil
 }
@@ -87,28 +80,9 @@ func (s *Service) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) readMessages(ctx context.Context) {
-	logrus.WithFields(logrus.Fields{
-		"name": s.cfg.Name,
-	}).Info("operation: start read messages")
-
-	for {
-		select {
-		case <-ctx.Done():
-			logrus.Debugf("operation: context done")
-			return
-		case <-s.quitChan:
-			logrus.Debugf("operation: quit channel received")
-			return
-		case msg := <-s.msgChan:
-			logrus.Debugf("operation: received message: %+v", msg)
-		}
-	}
-}
-
 // Stop закрывает сервис.
 func (s *Service) Stop(_ context.Context) error {
-	logrus.Debugf("operation: closing")
+	logrus.Debugf("operation %s: closing", s.cfg.Name)
 
 	close(s.quitChan)
 
