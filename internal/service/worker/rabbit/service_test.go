@@ -1,7 +1,6 @@
 package rabbit
 
 import (
-	interfaces "db-worker/internal/service/message/interface"
 	"testing"
 
 	"github.com/streadway/amqp"
@@ -26,6 +25,7 @@ func TestNew(t *testing.T) {
 				WithAddress("test"),
 				WithExchange("test"),
 				WithRoutingKey("test"),
+				WithQueue("test"),
 				WithInsertTimeout(1),
 				WithReadTimeout(1),
 			},
@@ -34,16 +34,18 @@ func TestNew(t *testing.T) {
 					address    string
 					name       string
 					exchange   string
+					queue      string
 					routingKey string
 				}{
-					address:    "test",
-					name:       "test",
-					exchange:   "test",
-					routingKey: "test",
+					address:    "address",
+					name:       "name",
+					exchange:   "exchange",
+					queue:      "queue",
+					routingKey: "routingKey",
 				},
-				msgChan: make(chan interfaces.Message),
+				msgChan: make(chan map[string]interface{}),
 				queue: amqp.Queue{
-					Name: "test",
+					Name: "queue",
 				},
 				conn:          &amqp.Connection{},
 				channel:       &amqp.Channel{},
@@ -141,24 +143,32 @@ func TestName(t *testing.T) {
 
 	rabbit := &Worker{
 		config: struct {
-			address    string
-			name       string
+			address string
+			name    string
+
 			exchange   string
+			queue      string
 			routingKey string
 		}{
-			name: "test",
+			address:    "address",
+			name:       "name",
+			exchange:   "exchange",
+			queue:      "queue",
+			routingKey: "routingKey",
 		},
 	}
 
-	require.Equal(t, "test", rabbit.Name())
+	require.Equal(t, "name", rabbit.Name())
 }
 
 func TestMsgChan(t *testing.T) {
 	t.Parallel()
 
+	msgChan := make(chan map[string]interface{})
+
 	rabbit := &Worker{
-		msgChan: make(chan interfaces.Message),
+		msgChan: msgChan,
 	}
 
-	require.Equal(t, rabbit.msgChan, rabbit.MsgChan())
+	require.Equal(t, msgChan, rabbit.MsgChan())
 }

@@ -15,16 +15,14 @@ type Butler struct {
 	BuildInfo *BuildInfo
 
 	quit chan struct{}
-	ctx  *context.Context
 
 	// Для отслеживания количества запущенных горутин
 	wg sync.WaitGroup
 }
 
-func NewButler(ctx *context.Context) *Butler {
+func NewButler() *Butler {
 	return &Butler{
 		BuildInfo: ReadBuildInfo(),
-		ctx:       ctx,
 		quit:      make(chan struct{}),
 	}
 }
@@ -49,10 +47,10 @@ type stopper interface {
 	Stop(ctx context.Context) error
 }
 
-func (b *Butler) stop(svc stopper) {
+func (b *Butler) stop(ctx context.Context, svc stopper) {
 	name := fmt.Sprintf("%T", svc)
 
-	if err := svc.Stop(*b.ctx); err != nil {
+	if err := svc.Stop(ctx); err != nil {
 		logrus.WithError(err).Errorf("dirty shutdown %s", name)
 		return
 	}
