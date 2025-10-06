@@ -55,7 +55,7 @@ func (b *Butler) stop(ctx context.Context, svc stopper) {
 		return
 	}
 
-	logrus.Debugf("successfully stopped %s", name)
+	logrus.WithField("name", name).Info("successfully stopped")
 }
 
 // waitForAll ждет завершения всех запущенных горутин.

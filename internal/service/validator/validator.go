@@ -59,7 +59,7 @@ func (v *validator) Validate() error {
 	return validate(v.field, v.val)
 }
 
-// forField возвращает валидатор для поля.
+// forField возвращает валидатор для поля в зависимости от типа поля.
 func forField(field operation.Field) (validatorFunc, error) {
 	validator, ok := validatorsMap[field.Type]
 	if !ok {
@@ -70,46 +70,53 @@ func forField(field operation.Field) (validatorFunc, error) {
 }
 
 func validateInt64(field operation.Field, val any) error {
-	_, ok := val.(int64)
+	v, ok := val.(int64)
 	if !ok {
 		return validateFloat64(field, val) // иногда int64 приходит как float64
 	}
 
-	return nil
+	return validateInt64Value(field, v)
 }
 
 func validateFloat64(field operation.Field, val any) error {
-	_, ok := val.(float64)
+	v, ok := val.(float64)
 	if !ok {
 		return fmt.Errorf("field %s is not a float64", field.Name)
 	}
 
-	return nil
+	return validateFloat64Value(field, v)
 }
 
 func validateBool(field operation.Field, val any) error {
-	_, ok := val.(bool)
+	v, ok := val.(bool)
 	if !ok {
 		return fmt.Errorf("field %s is not a bool", field.Name)
 	}
 
-	return nil
+	return validateBoolValue(field, v)
 }
 
 func validateUUID(field operation.Field, val any) error {
-	_, ok := val.(uuid.UUID)
+	v, ok := val.(uuid.UUID)
 	if !ok {
 		return fmt.Errorf("field %s is not a uuid", field.Name)
 	}
+
+	_, err := uuid.Parse(v.String())
+	if err != nil {
+		return fmt.Errorf("field %s must be a valid uuid", field.Name)
+	}
+
+	// здесь нет валидации, т.к. uuid.Parse покрывает все случаи
 
 	return nil
 }
 
 func validateString(field operation.Field, val any) error {
-	_, ok := val.(string)
+	v, ok := val.(string)
 	if !ok {
 		return fmt.Errorf("field %s is not a string", field.Name)
 	}
 
-	return nil
+	return validateStringValue(field, v)
 }

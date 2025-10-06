@@ -8,9 +8,20 @@ operations: # операции, которые можно выполнить н�
       - name: user_id
         type: int64
         required: true
+        validation:
+          - type: min
+            value: 100
+          - type: max
+            value: 1000
       - name: text
         type: string
         required: true
+        validation:
+          - type: not_empty
+          - type: max_length
+            value: 3
+          - type: min_length
+            value: 1
     request: # каким образом будет получен запрос на операцию
       from: rabbit_notes_create # соединение, из которого будет получен запрос. должно быть в списке connections
         

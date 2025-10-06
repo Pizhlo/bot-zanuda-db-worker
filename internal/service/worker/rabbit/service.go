@@ -249,11 +249,11 @@ func (s *Worker) Address() string {
 func (s *Worker) Stop(_ context.Context) error {
 	err := s.channel.Close()
 	if err != nil {
-		logrus.Errorf("worker: error closing channel rabbit mq: %+v", err)
+		return fmt.Errorf("worker: error closing channel rabbit mq: %w", err)
 	}
 
 	if err := s.conn.Close(); err != nil {
-		logrus.Errorf("worker: error closing connection rabbit mq: %+v", err)
+		return fmt.Errorf("worker: error closing connection rabbit mq: %w", err)
 	}
 
 	close(s.quitChan)

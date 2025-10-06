@@ -146,7 +146,7 @@ func TestValidateMessage(t *testing.T) {
 }
 
 //nolint:funlen // это тест
-func TestValidateFields(t *testing.T) {
+func TestValidateFieldsCount(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -268,7 +268,7 @@ func TestValidateFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.svc.validateFields(tt.msg)
+			err := tt.svc.validateFieldsCount(tt.msg)
 			tt.wantErr(t, err)
 		})
 	}
