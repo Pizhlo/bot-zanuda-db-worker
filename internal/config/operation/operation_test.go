@@ -270,3 +270,242 @@ func TestMapConnections(t *testing.T) {
 
 	assert.Equal(t, expected, op.ConnectionsMap)
 }
+
+//nolint:funlen,dupl // это тест; проверяем одни случаи в разных тестах
+func TestAggregateValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		opName   string
+		field    Field
+		expected Field
+		wantErr  require.ErrorAssertionFunc
+	}{
+		{
+			name: "positive case #1",
+			field: Field{
+				Name: "field2",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeExpectedValue,
+						Value: 123,
+					},
+					{
+						Type:  ValidationTypeMin,
+						Value: 10,
+					},
+					{
+						Type:  ValidationTypeMax,
+						Value: 100,
+					},
+				},
+			},
+			expected: Field{
+				Name: "field2",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeExpectedValue,
+						Value: 123,
+					},
+					{
+						Type:  ValidationTypeMin,
+						Value: 10,
+					},
+					{
+						Type:  ValidationTypeMax,
+						Value: 100,
+					},
+				},
+				Validation: AggregatedValidation{
+					ExpectedValue: 123,
+					Min:           fromValToPointer(t, 10),
+					Max:           fromValToPointer(t, 100),
+				},
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "positive case #2",
+			field: Field{
+				Name: "field2",
+				Type: FieldTypeString,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeExpectedValue,
+						Value: "string",
+					},
+					{
+						Type:  ValidationTypeMinLength,
+						Value: 10,
+					},
+					{
+						Type:  ValidationTypeMaxLength,
+						Value: 100,
+					},
+				},
+			},
+			expected: Field{
+				Name: "field2",
+				Type: FieldTypeString,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeExpectedValue,
+						Value: "string",
+					},
+					{
+						Type:  ValidationTypeMinLength,
+						Value: 10,
+					},
+					{
+						Type:  ValidationTypeMaxLength,
+						Value: 100,
+					},
+				},
+				Validation: AggregatedValidation{
+					ExpectedValue: "string",
+					MinLength:     fromValToPointer(t, 10),
+					MaxLength:     fromValToPointer(t, 100),
+				},
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "negative case: validation type min: value is not int",
+			field: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMin,
+						Value: "string",
+					},
+				},
+			},
+			expected: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMin,
+						Value: "string",
+					},
+				},
+			},
+			opName:  "create_notes",
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: validation type max: value is not int",
+			field: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMax,
+						Value: "string",
+					},
+				},
+			},
+			expected: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMax,
+						Value: "string",
+					},
+				},
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: validation type max_length: value is not int",
+			field: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMaxLength,
+						Value: "string",
+					},
+				},
+			},
+			expected: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMaxLength,
+						Value: "string",
+					},
+				},
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: validation type min_length: value is not int",
+			field: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMinLength,
+						Value: "string",
+					},
+				},
+			},
+			expected: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMinLength,
+						Value: "string",
+					},
+				},
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "positive case: validation type not_empty",
+			field: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeNotEmpty,
+						Value: true,
+					},
+				},
+			},
+			expected: Field{
+				Name: "field1",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeNotEmpty,
+						Value: true,
+					},
+				},
+				Validation: AggregatedValidation{
+					NotEmpty: true,
+				},
+			},
+			wantErr: require.NoError,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := aggregateValidation(test.opName, test.field)
+			test.wantErr(t, err)
+
+			require.Equal(t, test.expected, got)
+		})
+	}
+}

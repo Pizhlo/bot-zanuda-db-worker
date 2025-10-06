@@ -113,9 +113,21 @@ const (
 
 // Field - поле сообщения.
 type Field struct {
-	Name     string    `yaml:"name"`
-	Type     FieldType `yaml:"type" validate:"required,oneof=string int64 float64 bool uuid"`
-	Required bool      `yaml:"required"`
+	Name            string               `yaml:"name"`
+	Type            FieldType            `yaml:"type" validate:"required,oneof=string int64 float64 bool uuid"`
+	Required        bool                 `yaml:"required"`
+	ValidationsList []Validation         `yaml:"validation" validate:"omitempty,dive"`
+	Validation      AggregatedValidation `yaml:"-" validate:"-"` // все валидации, которые будут применены к полю
+}
+
+// AggregatedValidation - все валидации, которые будут применены к полю.
+type AggregatedValidation struct {
+	Max           *int // максимальное значение
+	Min           *int // минимальное значение
+	MaxLength     *int // максимальная длина
+	MinLength     *int // минимальная длина
+	NotEmpty      bool // не пустое значение
+	ExpectedValue any  // ожидаемое значение
 }
 
 // Request - откуда будет получен запрос на операцию.
@@ -145,9 +157,31 @@ func LoadOperation(path string) (OperationConfig, error) {
 	operationConfig.mapStorages()
 	operationConfig.mapConnections()
 
+	for i, operation := range operationConfig.Operations {
+		for j, field := range operation.Fields {
+			field, err = aggregateValidation(operation.Name, field)
+			if err != nil {
+				return OperationConfig{}, fmt.Errorf("error aggregating validation: %w", err)
+			}
+
+			operation.Fields[j] = field
+		}
+
+		operationConfig.Operations[i] = operation
+	}
+
 	logrus.Infof("loaded %d operation(s)", len(operationConfig.Operations))
 	logrus.Infof("loaded %d connection(s)", len(operationConfig.Connections))
 	logrus.Infof("loaded %d storage(s)", len(operationConfig.Storages))
+
+	for _, operation := range operationConfig.Operations {
+		for _, field := range operation.Fields {
+			err = validateFieldConfig(field)
+			if err != nil {
+				return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
+			}
+		}
+	}
 
 	return operationConfig, nil
 }
@@ -166,4 +200,50 @@ func (oc *OperationConfig) mapConnections() {
 	for _, connection := range oc.Connections {
 		oc.ConnectionsMap[connection.Name] = connection
 	}
+}
+
+// aggregateValidation собирает все валидации в одну структуру для дальнейшей работы.
+func aggregateValidation(opName string, field Field) (Field, error) {
+	for i, validation := range field.ValidationsList {
+		value := validation.Value
+
+		switch validation.Type {
+		case ValidationTypeMax:
+			v, ok := value.(int)
+			if !ok {
+				return field, fmt.Errorf("operation %s: field %s: value is not int", opName, field.Name)
+			}
+
+			field.Validation.Max = &v
+		case ValidationTypeMin:
+			v, ok := value.(int)
+			if !ok {
+				return field, fmt.Errorf("operation %s: field %s: value is not int", opName, field.Name)
+			}
+
+			field.Validation.Min = &v
+		case ValidationTypeMaxLength:
+			v, ok := value.(int)
+			if !ok {
+				return field, fmt.Errorf("operation %s: field %s: value is not int", opName, field.Name)
+			}
+
+			field.Validation.MaxLength = &v
+		case ValidationTypeMinLength:
+			v, ok := value.(int)
+			if !ok {
+				return field, fmt.Errorf("operation %s: field %s: value is not int", opName, field.Name)
+			}
+
+			field.Validation.MinLength = &v
+		case ValidationTypeNotEmpty:
+			field.Validation.NotEmpty = true // если указано, то всегда true
+		case ValidationTypeExpectedValue:
+			field.Validation.ExpectedValue = value
+		}
+
+		field.ValidationsList[i] = validation
+	}
+
+	return field, nil
 }

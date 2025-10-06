@@ -7,36 +7,27 @@ import (
 )
 
 func (s *Service) validateMessage(msg map[string]interface{}) error {
-	err := s.validateFields(msg)
+	err := s.validateFieldsCount(msg)
 	if err != nil {
 		return fmt.Errorf("operation: error validate fields: %w", err)
 	}
 
 	err = s.validateFieldVals(msg)
 	if err != nil {
-		return fmt.Errorf("operation: error validate fields types: %w", err)
+		return fmt.Errorf("operation: error validate fields values: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Service) validateFields(msg map[string]interface{}) error {
-	visited := make(map[string]bool)
-
+func (s *Service) validateFieldsCount(msg map[string]interface{}) error {
+	// проверить, что все обязательные поля присутствуют в сообщении
 	for _, field := range s.cfg.Fields {
-		if field.Required && msg[field.Name] == nil {
-			return fmt.Errorf("field %s is required", field.Name)
+		if field.Required {
+			if _, ok := msg[field.Name]; !ok {
+				return fmt.Errorf("field %s is required", field.Name)
+			}
 		}
-
-		if visited[field.Name] {
-			continue
-		}
-
-		visited[field.Name] = true
-	}
-
-	if len(visited) != len(s.cfg.Fields) {
-		return fmt.Errorf("some fields are missing")
 	}
 
 	return nil
