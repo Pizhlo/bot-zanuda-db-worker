@@ -15,10 +15,18 @@ func (s *Service) readMessages(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Debugf("operation %s: context done", s.cfg.Name)
+			logrus.WithFields(logrus.Fields{
+				"name":       s.cfg.Name,
+				"connection": s.cfg.Request.From,
+			}).Debug("operation: context done")
+
 			return
 		case <-s.quitChan:
-			logrus.Debugf("operation %s: quit channel received", s.cfg.Name)
+			logrus.WithFields(logrus.Fields{
+				"name":       s.cfg.Name,
+				"connection": s.cfg.Request.From,
+			}).Debug("operation: quit channel received")
+
 			return
 		case msg, ok := <-s.msgChan:
 			if !ok {

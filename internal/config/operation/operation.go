@@ -170,9 +170,9 @@ func LoadOperation(path string) (OperationConfig, error) {
 		operationConfig.Operations[i] = operation
 	}
 
-	logrus.Infof("loaded %d operation(s)", len(operationConfig.Operations))
-	logrus.Infof("loaded %d connection(s)", len(operationConfig.Connections))
-	logrus.Infof("loaded %d storage(s)", len(operationConfig.Storages))
+	logrus.WithField("count", len(operationConfig.Operations)).Info("loaded operations")
+	logrus.WithField("count", len(operationConfig.Connections)).Info("loaded connections")
+	logrus.WithField("count", len(operationConfig.Storages)).Info("loaded storages")
 
 	for _, operation := range operationConfig.Operations {
 		for _, field := range operation.Fields {

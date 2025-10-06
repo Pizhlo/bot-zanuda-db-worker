@@ -82,7 +82,9 @@ func (s *Service) Run(ctx context.Context) error {
 
 // Stop закрывает сервис.
 func (s *Service) Stop(_ context.Context) error {
-	logrus.Debugf("operation %s: closing", s.cfg.Name)
+	logrus.WithFields(logrus.Fields{
+		"name": s.cfg.Name,
+	}).Debug("operation: closing")
 
 	close(s.quitChan)
 
