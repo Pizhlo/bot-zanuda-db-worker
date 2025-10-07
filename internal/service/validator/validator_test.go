@@ -48,406 +48,696 @@ func TestWithVal(t *testing.T) {
 	assert.Equal(t, val, v.val)
 }
 
-func TestValidate_EmptyFieldType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{Name: "test"}).
-		WithVal("test_value")
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field type is required")
-}
-
-func TestValidate_NilValue(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test",
-			Type: operation.FieldTypeString,
-		}).
-		WithVal(nil)
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "value is required")
-}
-
-func TestValidate_UnknownFieldType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test",
-			Type: "unknown_type",
-		}).
-		WithVal("test_value")
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "validator not found for field type: unknown_type")
-}
-
-func TestValidateString_Success(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_string",
-			Type: operation.FieldTypeString,
-		}).
-		WithVal("test_value")
-
-	err := v.Validate()
-
-	assert.NoError(t, err)
-}
-
-func TestValidateString_InvalidType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_string",
-			Type: operation.FieldTypeString,
-		}).
-		WithVal(123)
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test_string is not a string")
-}
-
-func TestValidateInt64_Success(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_int64",
-			Type: operation.FieldTypeInt64,
-		}).
-		WithVal(int64(123))
-
-	err := v.Validate()
-
-	assert.NoError(t, err)
-}
-
-func TestValidateInt64_AsFloat64_Success(t *testing.T) {
-	// Тест для случая, когда int64 приходит как float64
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_int64",
-			Type: operation.FieldTypeInt64,
-		}).
-		WithVal(float64(123))
-
-	err := v.Validate()
-
-	assert.NoError(t, err)
-}
-
-func TestValidateInt64_InvalidType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_int64",
-			Type: operation.FieldTypeInt64,
-		}).
-		WithVal("not_a_number")
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test_int64 is not a float64")
-}
-
-func TestValidateFloat64_Success(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_float64",
-			Type: operation.FieldTypeFloat64,
-		}).
-		WithVal(float64(123.45))
-
-	err := v.Validate()
-
-	assert.NoError(t, err)
-}
-
-func TestValidateFloat64_InvalidType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_float64",
-			Type: operation.FieldTypeFloat64,
-		}).
-		WithVal("not_a_float")
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test_float64 is not a float64")
-}
-
-func TestValidateBool_Success(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_bool",
-			Type: operation.FieldTypeBool,
-		}).
-		WithVal(true)
-
-	err := v.Validate()
-
-	assert.NoError(t, err)
-}
-
-func TestValidateBool_InvalidType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_bool",
-			Type: operation.FieldTypeBool,
-		}).
-		WithVal("not_a_bool")
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test_bool is not a bool")
-}
-
-func TestValidateUUID_Success(t *testing.T) {
+//nolint:funlen // тестовая функция
+func TestValidate(t *testing.T) {
 	t.Parallel()
 
 	testUUID := uuid.New()
-	v := New().
-		WithField(operation.Field{
-			Name: "test_uuid",
-			Type: operation.FieldTypeUUID,
-		}).
-		WithVal(testUUID)
-
-	err := v.Validate()
-
-	assert.NoError(t, err)
-}
-
-func TestValidateUUID_InvalidType(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "test_uuid",
-			Type: operation.FieldTypeUUID,
-		}).
-		WithVal("not_a_uuid")
-
-	err := v.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test_uuid is not a uuid")
-}
-
-func TestForField_ValidTypes(t *testing.T) {
-	t.Parallel()
 
 	testCases := []struct {
-		name      string
-		fieldType operation.FieldType
+		name        string
+		field       operation.Field
+		value       any
+		expectError bool
+		errorMsg    string
 	}{
-		{"string", operation.FieldTypeString},
-		{"int64", operation.FieldTypeInt64},
-		{"float64", operation.FieldTypeFloat64},
-		{"bool", operation.FieldTypeBool},
-		{"uuid", operation.FieldTypeUUID},
+		// Ошибки валидации
+		{
+			name:        "empty_field_type",
+			field:       operation.Field{Name: "test"},
+			value:       "test_value",
+			expectError: true,
+			errorMsg:    "field type is required",
+		},
+		{
+			name: "nil_value",
+			field: operation.Field{
+				Name: "test",
+				Type: operation.FieldTypeString,
+			},
+			value:       nil,
+			expectError: true,
+			errorMsg:    "value is required",
+		},
+		{
+			name: "unknown_field_type",
+			field: operation.Field{
+				Name: "test",
+				Type: "unknown_type",
+			},
+			value:       "test_value",
+			expectError: true,
+			errorMsg:    "validator not found for field type: unknown_type",
+		},
+
+		// String валидация
+		{
+			name: "string_success",
+			field: operation.Field{
+				Name: "test_string",
+				Type: operation.FieldTypeString,
+			},
+			value:       "test_value",
+			expectError: false,
+		},
+		{
+			name: "string_invalid_type",
+			field: operation.Field{
+				Name: "test_string",
+				Type: operation.FieldTypeString,
+			},
+			value:       123,
+			expectError: true,
+			errorMsg:    "field \"test_string\" is not a string",
+		},
+		{
+			name: "string_empty",
+			field: operation.Field{
+				Name: "empty_string",
+				Type: operation.FieldTypeString,
+			},
+			value:       "",
+			expectError: false,
+		},
+
+		// Int64 валидация
+		{
+			name: "int64_success",
+			field: operation.Field{
+				Name: "test_int64",
+				Type: operation.FieldTypeInt64,
+			},
+			value:       int64(123),
+			expectError: false,
+		},
+		{
+			name: "int64_as_float64_success",
+			field: operation.Field{
+				Name: "test_int64",
+				Type: operation.FieldTypeInt64,
+			},
+			value:       float64(123),
+			expectError: false,
+		},
+		{
+			name: "int64_invalid_type",
+			field: operation.Field{
+				Name: "test_int64",
+				Type: operation.FieldTypeInt64,
+			},
+			value:       "not_a_number",
+			expectError: true,
+			errorMsg:    "field \"test_int64\" is not a float64",
+		},
+		{
+			name: "int64_zero_value",
+			field: operation.Field{
+				Name: "zero_int64",
+				Type: operation.FieldTypeInt64,
+			},
+			value:       int64(0),
+			expectError: false,
+		},
+
+		// Float64 валидация
+		{
+			name: "float64_success",
+			field: operation.Field{
+				Name: "test_float64",
+				Type: operation.FieldTypeFloat64,
+			},
+			value:       float64(123.45),
+			expectError: false,
+		},
+		{
+			name: "float64_invalid_type",
+			field: operation.Field{
+				Name: "test_float64",
+				Type: operation.FieldTypeFloat64,
+			},
+			value:       "not_a_float",
+			expectError: true,
+			errorMsg:    "field \"test_float64\" is not a float64",
+		},
+		{
+			name: "float64_zero_value",
+			field: operation.Field{
+				Name: "zero_float64",
+				Type: operation.FieldTypeFloat64,
+			},
+			value:       float64(0.0),
+			expectError: false,
+		},
+
+		// Bool валидация
+		{
+			name: "bool_success_true",
+			field: operation.Field{
+				Name: "test_bool",
+				Type: operation.FieldTypeBool,
+			},
+			value:       true,
+			expectError: false,
+		},
+		{
+			name: "bool_success_false",
+			field: operation.Field{
+				Name: "test_bool",
+				Type: operation.FieldTypeBool,
+			},
+			value:       false,
+			expectError: false,
+		},
+		{
+			name: "bool_invalid_type",
+			field: operation.Field{
+				Name: "test_bool",
+				Type: operation.FieldTypeBool,
+			},
+			value:       "not_a_bool",
+			expectError: true,
+			errorMsg:    "field \"test_bool\" is not a bool",
+		},
+
+		// UUID валидация
+		{
+			name: "uuid_success",
+			field: operation.Field{
+				Name: "test_uuid",
+				Type: operation.FieldTypeUUID,
+			},
+			value:       testUUID,
+			expectError: false,
+		},
+		{
+			name: "uuid_invalid_type",
+			field: operation.Field{
+				Name: "test_uuid",
+				Type: operation.FieldTypeUUID,
+			},
+			value:       "not_a_uuid",
+			expectError: true,
+			errorMsg:    "field \"test_uuid\" is not a uuid",
+		},
+		{
+			name: "uuid_nil_value",
+			field: operation.Field{
+				Name: "nil_uuid",
+				Type: operation.FieldTypeUUID,
+			},
+			value:       uuid.Nil,
+			expectError: false,
+		},
+
+		// Chained calls test
+		{
+			name: "chained_calls_success",
+			field: operation.Field{
+				Name: "chained_test",
+				Type: operation.FieldTypeString,
+			},
+			value:       "test_value",
+			expectError: false,
+		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			field := operation.Field{Type: tc.fieldType}
-			validator, err := forField(field)
-
-			assert.NoError(t, err)
-			assert.NotNil(t, validator)
-		})
-	}
-}
-
-func TestForField_InvalidType(t *testing.T) {
-	t.Parallel()
-
-	field := operation.Field{Type: "invalid_type"}
-	validator, err := forField(field)
-
-	require.Error(t, err)
-	assert.Nil(t, validator)
-	assert.Contains(t, err.Error(), "validator not found for field type: invalid_type")
-}
-
-// Тесты для отдельных функций валидации.
-func TestValidateString_Function(t *testing.T) {
-	t.Parallel()
-
-	field := operation.Field{Name: "test", Type: operation.FieldTypeString}
-
-	// Успешный случай
-	err := validateString(field, "test_value")
-	assert.NoError(t, err)
-
-	// Ошибочный случай
-	err = validateString(field, 123)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test is not a string")
-}
-
-func TestValidateInt64_Function(t *testing.T) {
-	t.Parallel()
-
-	field := operation.Field{Name: "test", Type: operation.FieldTypeInt64}
-
-	// Успешный случай с int64
-	err := validateInt64(field, int64(123))
-	assert.NoError(t, err)
-
-	// Успешный случай с float64 (fallback)
-	err = validateInt64(field, float64(123))
-	assert.NoError(t, err)
-
-	// Ошибочный случай
-	err = validateInt64(field, "not_a_number")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test is not a float64")
-}
-
-func TestValidateFloat64_Function(t *testing.T) {
-	t.Parallel()
-
-	field := operation.Field{Name: "test", Type: operation.FieldTypeFloat64}
-
-	// Успешный случай
-	err := validateFloat64(field, float64(123.45))
-	assert.NoError(t, err)
-
-	// Ошибочный случай
-	err = validateFloat64(field, "not_a_float")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test is not a float64")
-}
-
-func TestValidateBool_Function(t *testing.T) {
-	t.Parallel()
-
-	field := operation.Field{Name: "test", Type: operation.FieldTypeBool}
-
-	// Успешный случай
-	err := validateBool(field, true)
-	assert.NoError(t, err)
-
-	err = validateBool(field, false)
-	assert.NoError(t, err)
-
-	// Ошибочный случай
-	err = validateBool(field, "not_a_bool")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test is not a bool")
-}
-
-func TestValidateUUID_Function(t *testing.T) {
-	t.Parallel()
-
-	field := operation.Field{Name: "test", Type: operation.FieldTypeUUID}
-	testUUID := uuid.New()
-
-	// Успешный случай
-	err := validateUUID(field, testUUID)
-	assert.NoError(t, err)
-
-	// Ошибочный случай
-	err = validateUUID(field, "not_a_uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "field test is not a uuid")
-}
-
-// Тесты для edge cases.
-func TestValidate_EmptyString(t *testing.T) {
-	t.Parallel()
-
-	v := New().
-		WithField(operation.Field{
-			Name: "empty_string",
-			Type: operation.FieldTypeString,
-		}).
-		WithVal("")
-
-	err := v.Validate()
-
-	assert.NoError(t, err) // Пустая строка - валидная строка
-}
-
-func TestValidate_ZeroValues(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name      string
-		fieldType operation.FieldType
-		value     any
-	}{
-		{"zero_int64", operation.FieldTypeInt64, int64(0)},
-		{"zero_float64", operation.FieldTypeFloat64, float64(0.0)},
-		{"false_bool", operation.FieldTypeBool, false},
-		{"nil_uuid", operation.FieldTypeUUID, uuid.Nil},
-	}
-
-	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			v := New().
-				WithField(operation.Field{
-					Name: tc.name,
-					Type: tc.fieldType,
-				}).
+				WithField(tc.field).
 				WithVal(tc.value)
 
 			err := v.Validate()
-			assert.NoError(t, err)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
 
-func TestValidate_ChainedCalls(t *testing.T) {
+//nolint:funlen // тестовая функция
+func TestForField(t *testing.T) {
 	t.Parallel()
 
-	// Тест для проверки, что можно вызывать методы в цепочке
-	v := New().
-		WithField(operation.Field{
-			Name: "chained_test",
-			Type: operation.FieldTypeString,
-		}).
-		WithVal("test_value")
+	testCases := []struct {
+		name        string
+		field       operation.Field
+		expectError bool
+		errorMsg    string
+	}{
+		// Валидные типы полей
+		{
+			name:        "string_type",
+			field:       operation.Field{Type: operation.FieldTypeString},
+			expectError: false,
+		},
+		{
+			name:        "int64_type",
+			field:       operation.Field{Type: operation.FieldTypeInt64},
+			expectError: false,
+		},
+		{
+			name:        "float64_type",
+			field:       operation.Field{Type: operation.FieldTypeFloat64},
+			expectError: false,
+		},
+		{
+			name:        "bool_type",
+			field:       operation.Field{Type: operation.FieldTypeBool},
+			expectError: false,
+		},
+		{
+			name:        "uuid_type",
+			field:       operation.Field{Type: operation.FieldTypeUUID},
+			expectError: false,
+		},
 
-	err := v.Validate()
+		// Невалидные типы полей
+		{
+			name:        "invalid_type",
+			field:       operation.Field{Type: "invalid_type"},
+			expectError: true,
+			errorMsg:    "validator not found for field type: invalid_type",
+		},
+		{
+			name:        "empty_type",
+			field:       operation.Field{Type: ""},
+			expectError: true,
+			errorMsg:    "validator not found for field type: ",
+		},
+		{
+			name:        "unknown_type",
+			field:       operation.Field{Type: "unknown_type"},
+			expectError: true,
+			errorMsg:    "validator not found for field type: unknown_type",
+		},
+		{
+			name:        "numeric_type",
+			field:       operation.Field{Type: "numeric"},
+			expectError: true,
+			errorMsg:    "validator not found for field type: numeric",
+		},
+		{
+			name:        "text_type",
+			field:       operation.Field{Type: "text"},
+			expectError: true,
+			errorMsg:    "validator not found for field type: text",
+		},
+	}
 
-	assert.NoError(t, err)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			validator, err := forField(tc.field)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Nil(t, validator)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, validator)
+			}
+		})
+	}
+}
+
+// Тесты для отдельных функций валидации.
+//
+//nolint:funlen // тестовая функция
+func TestValidateString(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		field       operation.Field
+		value       any
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeString},
+			value:       "test_value",
+			expectError: false,
+		},
+		{
+			name:        "empty_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeString},
+			value:       "",
+			expectError: false,
+		},
+		{
+			name:        "long_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeString},
+			value:       "this is a very long string with many characters",
+			expectError: false,
+		},
+		{
+			name:        "invalid_type_int",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeString},
+			value:       123,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a string",
+		},
+		{
+			name:        "invalid_type_bool",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeString},
+			value:       true,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a string",
+		},
+		{
+			name:        "invalid_type_float",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeString},
+			value:       float64(123.45),
+			expectError: true,
+			errorMsg:    "field \"test\" is not a string",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateString(tc.field, tc.value)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+//nolint:funlen // тестовая функция
+func TestValidateInt64(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		field       operation.Field
+		value       any
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid_int64",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       int64(123),
+			expectError: false,
+		},
+		{
+			name:        "valid_int64_zero",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       int64(0),
+			expectError: false,
+		},
+		{
+			name:        "valid_int64_negative",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       int64(-123),
+			expectError: false,
+		},
+		{
+			name:        "valid_float64_fallback",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       float64(123),
+			expectError: false,
+		},
+		{
+			name:        "valid_float64_zero_fallback",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       float64(0),
+			expectError: false,
+		},
+		{
+			name:        "invalid_type_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       "not_a_number",
+			expectError: true,
+			errorMsg:    "field \"test\" is not a float64",
+		},
+		{
+			name:        "invalid_type_bool",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeInt64},
+			value:       true,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a float64",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateInt64(tc.field, tc.value)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+//nolint:funlen // тестовая функция
+func TestValidateFloat64(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		field       operation.Field
+		value       any
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid_float64",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       float64(123.45),
+			expectError: false,
+		},
+		{
+			name:        "valid_float64_zero",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       float64(0.0),
+			expectError: false,
+		},
+		{
+			name:        "valid_float64_negative",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       float64(-123.45),
+			expectError: false,
+		},
+		{
+			name:        "valid_float64_large",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       float64(999999.999),
+			expectError: false,
+		},
+		{
+			name:        "invalid_type_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       "not_a_float",
+			expectError: true,
+			errorMsg:    "field \"test\" is not a float64",
+		},
+		{
+			name:        "invalid_type_int",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       123,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a float64",
+		},
+		{
+			name:        "invalid_type_bool",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeFloat64},
+			value:       true,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a float64",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateFloat64(tc.field, tc.value)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+//nolint:funlen // тестовая функция
+func TestValidateBool(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		field       operation.Field
+		value       any
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid_bool_true",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeBool},
+			value:       true,
+			expectError: false,
+		},
+		{
+			name:        "valid_bool_false",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeBool},
+			value:       false,
+			expectError: false,
+		},
+		{
+			name:        "invalid_type_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeBool},
+			value:       "not_a_bool",
+			expectError: true,
+			errorMsg:    "field \"test\" is not a bool",
+		},
+		{
+			name:        "invalid_type_int",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeBool},
+			value:       123,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a bool",
+		},
+		{
+			name:        "invalid_type_float",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeBool},
+			value:       float64(123.45),
+			expectError: true,
+			errorMsg:    "field \"test\" is not a bool",
+		},
+		{
+			name:        "invalid_type_string_true",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeBool},
+			value:       "true",
+			expectError: true,
+			errorMsg:    "field \"test\" is not a bool",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateBool(tc.field, tc.value)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+//nolint:funlen // тестовая функция
+func TestValidateUUID(t *testing.T) {
+	t.Parallel()
+
+	testUUID := uuid.New()
+
+	testCases := []struct {
+		name        string
+		field       operation.Field
+		value       any
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid_uuid",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       testUUID,
+			expectError: false,
+		},
+		{
+			name:        "valid_uuid_nil",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       uuid.Nil,
+			expectError: false,
+		},
+		{
+			name:        "invalid_type_string",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       "not_a_uuid",
+			expectError: true,
+			errorMsg:    "field \"test\" is not a uuid",
+		},
+		{
+			name:        "invalid_type_int",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       123,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a uuid",
+		},
+		{
+			name:        "invalid_type_bool",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       true,
+			expectError: true,
+			errorMsg:    "field \"test\" is not a uuid",
+		},
+		{
+			name:        "invalid_type_float",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       float64(123.45),
+			expectError: true,
+			errorMsg:    "field \"test\" is not a uuid",
+		},
+		{
+			name:        "invalid_type_string_uuid",
+			field:       operation.Field{Name: "test", Type: operation.FieldTypeUUID},
+			value:       "550e8400-e29b-41d4-a716-446655440000",
+			expectError: true,
+			errorMsg:    "field \"test\" is not a uuid",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateUUID(tc.field, tc.value)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestValidatorsMap_Completeness(t *testing.T) {
