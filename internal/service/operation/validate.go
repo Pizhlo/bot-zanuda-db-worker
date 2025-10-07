@@ -25,7 +25,7 @@ func (s *Service) validateFieldsCount(msg map[string]interface{}) error {
 	for _, field := range s.cfg.Fields {
 		if field.Required {
 			if _, ok := msg[field.Name]; !ok {
-				return fmt.Errorf("field %s is required", field.Name)
+				return fmt.Errorf("field %q is required", field.Name)
 			}
 		}
 	}
@@ -37,7 +37,7 @@ func (s *Service) validateFieldVals(msg map[string]interface{}) error {
 	for _, field := range s.cfg.Fields {
 		val, ok := msg[field.Name]
 		if !ok {
-			return fmt.Errorf("field %s is not found", field.Name)
+			return fmt.Errorf("field %q is not found", field.Name)
 		}
 
 		if err := s.validateFieldVal(val, field); err != nil {

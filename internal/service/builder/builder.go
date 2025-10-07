@@ -41,4 +41,6 @@ type Builder interface {
 type operations interface {
 	// WithCreateOperation устанавливает операцию создания.
 	WithCreateOperation() Builder
+	// WithUpdateOperation устанавливает операцию обновления.
+	WithUpdateOperation() (Builder, error)
 }
