@@ -197,6 +197,9 @@ func validateExpectedValueConsistency(f Field) error {
 	case FieldTypeUUID:
 		return validateExpectedValueUUID(f)
 
+	case FieldTypeBool:
+		return validateExpectedValueBool(f)
+
 	default:
 		return fmt.Errorf("unsupported field type %q", f.Type)
 	}
@@ -205,15 +208,15 @@ func validateExpectedValueConsistency(f Field) error {
 func validateExpectedValueString(f Field) error {
 	s, ok := f.Validation.ExpectedValue.(string)
 	if !ok {
-		return fmt.Errorf("field %s: value is not string", f.Name)
+		return fmt.Errorf("field %s: expected value is not string", f.Name)
 	}
 
 	if f.Validation.MinLength != nil && len(s) < int(*f.Validation.MinLength) {
-		return fmt.Errorf("field %s: value shorter than min_length", f.Name)
+		return fmt.Errorf("field %s: expected value shorter than min_length", f.Name)
 	}
 
 	if f.Validation.MaxLength != nil && len(s) > int(*f.Validation.MaxLength) {
-		return fmt.Errorf("field %s: value longer than max_length", f.Name)
+		return fmt.Errorf("field %s: expected value longer than max_length", f.Name)
 	}
 
 	return nil
@@ -222,15 +225,15 @@ func validateExpectedValueString(f Field) error {
 func validateExpectedValueInt64(f Field) error {
 	i, ok := f.Validation.ExpectedValue.(int)
 	if !ok {
-		return fmt.Errorf("field %s: value is not int64", f.Name)
+		return fmt.Errorf("field %s: expected value is not int64", f.Name)
 	}
 
 	if f.Validation.Min != nil && i < *f.Validation.Min {
-		return fmt.Errorf("field %s: value is less than min", f.Name)
+		return fmt.Errorf("field %s: expected value is less than min", f.Name)
 	}
 
 	if f.Validation.Max != nil && i > *f.Validation.Max {
-		return fmt.Errorf("field %s: value is greater than max", f.Name)
+		return fmt.Errorf("field %s: expected value is greater than max", f.Name)
 	}
 
 	return nil
@@ -239,15 +242,15 @@ func validateExpectedValueInt64(f Field) error {
 func validateExpectedValueFloat64(f Field) error {
 	fVal, ok := f.Validation.ExpectedValue.(float64)
 	if !ok {
-		return fmt.Errorf("field %s: value is not float64", f.Name)
+		return fmt.Errorf("field %s: expected value is not float64", f.Name)
 	}
 
 	if f.Validation.Min != nil && fVal < float64(*f.Validation.Min) {
-		return fmt.Errorf("field %s: value is less than min", f.Name)
+		return fmt.Errorf("field %s: expected value is less than min", f.Name)
 	}
 
 	if f.Validation.Max != nil && fVal > float64(*f.Validation.Max) {
-		return fmt.Errorf("field %s: value is greater than max", f.Name)
+		return fmt.Errorf("field %s: expected value is greater than max", f.Name)
 	}
 
 	return nil
@@ -256,12 +259,23 @@ func validateExpectedValueFloat64(f Field) error {
 func validateExpectedValueUUID(f Field) error {
 	s, ok := f.Validation.ExpectedValue.(string)
 	if !ok {
-		return fmt.Errorf("field %s: value is not string", f.Name)
+		return fmt.Errorf("field %s: expected value is not string", f.Name)
 	}
 
 	if _, err := uuid.Parse(s); err != nil {
-		return fmt.Errorf("field %s: value is not valid uuid", f.Name)
+		return fmt.Errorf("field %s: expected value is not valid uuid", f.Name)
 	}
+
+	return nil
+}
+
+func validateExpectedValueBool(f Field) error {
+	_, ok := f.Validation.ExpectedValue.(bool)
+	if !ok {
+		return fmt.Errorf("field %s: expected value is not bool", f.Name)
+	}
+
+	// дальше нет валидации, т.к. если удалось привести к bool, то это валидное значение
 
 	return nil
 }
