@@ -108,12 +108,14 @@ func (s *Service) execRequest(ctx context.Context, req *request) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.Timeout)*time.Millisecond)
 	defer cancel()
 
-	err := req.storage.driver.Exec(timeoutCtx, req.request)
-	if err != nil {
-		return fmt.Errorf("error exec request: %w", err)
-	}
+	logrus.WithFields(logrus.Fields{
+		"name":       s.cfg.Name,
+		"request":    req.request.Val,
+		"args":       req.request.Args,
+		"connection": s.cfg.Request.From,
+	}).Debug("operation: exec request")
 
-	return nil
+	return req.storage.driver.Exec(timeoutCtx, req.request)
 }
 
 type request struct {
