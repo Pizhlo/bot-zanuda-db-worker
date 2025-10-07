@@ -23,8 +23,9 @@ func TestLoadOperation(t *testing.T) {
 			want: OperationConfig{
 				Operations: []Operation{
 					{
-						Name: "create_notes",
-						Type: OperationTypeCreate,
+						Name:    "create_notes",
+						Timeout: 10000,
+						Type:    OperationTypeCreate,
 						Storages: []Storage{
 							{
 								Name:  "postgres_notes",
@@ -508,4 +509,134 @@ func TestAggregateValidation(t *testing.T) {
 			require.Equal(t, test.expected, got)
 		})
 	}
+}
+
+//nolint:funlen // это тест
+func TestMapFieldsByOperation(t *testing.T) {
+	t.Parallel()
+
+	op := Operation{
+		Name: "test",
+		Fields: []Field{
+			{
+				Name: "field1",
+				Type: FieldTypeString,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMinLength,
+						Value: 10,
+					},
+				},
+				Validation: AggregatedValidation{
+					MinLength: fromValToPointer(t, 10),
+				},
+				Required: true,
+			},
+			{
+				Name: "field2",
+				Type: FieldTypeInt64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeMax,
+						Value: 123,
+					},
+				},
+				Validation: AggregatedValidation{
+					Max: fromValToPointer(t, 123),
+				},
+				Required: true,
+			},
+			{
+				Name: "field3",
+				Type: FieldTypeFloat64,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeExpectedValue,
+						Value: 123.45,
+					},
+				},
+				Validation: AggregatedValidation{
+					ExpectedValue: 123.45,
+				},
+				Required: true,
+			},
+			{
+				Name: "field4",
+				Type: FieldTypeBool,
+				ValidationsList: []Validation{
+					{
+						Type:  ValidationTypeExpectedValue,
+						Value: true,
+					},
+				},
+				Validation: AggregatedValidation{
+					ExpectedValue: true,
+				},
+				Required: true,
+			},
+		},
+	}
+
+	expected := map[string]Field{
+		"field1": {
+			Name: "field1",
+			Type: FieldTypeString,
+			ValidationsList: []Validation{
+				{
+					Type:  ValidationTypeMinLength,
+					Value: 10,
+				},
+			},
+			Validation: AggregatedValidation{
+				MinLength: fromValToPointer(t, 10),
+			},
+			Required: true,
+		},
+		"field2": {
+			Name: "field2",
+			Type: FieldTypeInt64,
+			ValidationsList: []Validation{
+				{
+					Type:  ValidationTypeMax,
+					Value: 123,
+				},
+			},
+			Validation: AggregatedValidation{
+				Max: fromValToPointer(t, 123),
+			},
+			Required: true,
+		},
+		"field3": {
+			Name: "field3",
+			Type: FieldTypeFloat64,
+			ValidationsList: []Validation{
+				{
+					Type:  ValidationTypeExpectedValue,
+					Value: 123.45,
+				},
+			},
+			Validation: AggregatedValidation{
+				ExpectedValue: 123.45,
+			},
+			Required: true,
+		},
+		"field4": {
+			Name: "field4",
+			Type: FieldTypeBool,
+			ValidationsList: []Validation{
+				{
+					Type:  ValidationTypeExpectedValue,
+					Value: true,
+				},
+			},
+			Validation: AggregatedValidation{
+				ExpectedValue: true,
+			},
+			Required: true,
+		},
+	}
+
+	op.mapFieldsByOperation()
+
+	assert.Equal(t, expected, op.FieldsMap)
 }

@@ -1,5 +1,6 @@
 operations: # операции, которые можно выполнить над моделью
   - name: create_notes
+    timeout: 10000
     type: create
     storage: 
       - name: postgres_notes # хранилище, в котором нужно производить операцию из списка storages (если несколько - будет сохраняться транзакцией)
