@@ -38,10 +38,13 @@ type OperationConfig struct {
 // Operation - операция, которая будет выполнена над моделью.
 type Operation struct {
 	Name     string    `yaml:"name" validate:"required"`
+	Timeout  int       `yaml:"timeout" validate:"required,min=1"` // время ожидания операции в миллисекундах
 	Type     Type      `yaml:"type" validate:"required,oneof=create update delete delete_all"`
 	Storages []Storage `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
 	Fields   []Field   `yaml:"fields" validate:"required,dive"`
 	Request  Request   `yaml:"request" validate:"required"`
+
+	FieldsMap map[string]Field `yaml:"-" validate:"-"`
 }
 
 // ConnectionType - тип соединения.
@@ -181,6 +184,8 @@ func LoadOperation(path string) (OperationConfig, error) {
 				return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
 			}
 		}
+
+		operation.mapFieldsByOperation()
 	}
 
 	return operationConfig, nil
@@ -199,6 +204,14 @@ func (oc *OperationConfig) mapConnections() {
 
 	for _, connection := range oc.Connections {
 		oc.ConnectionsMap[connection.Name] = connection
+	}
+}
+
+func (oc *Operation) mapFieldsByOperation() {
+	oc.FieldsMap = make(map[string]Field)
+
+	for _, field := range oc.Fields {
+		oc.FieldsMap[field.Name] = field
 	}
 }
 

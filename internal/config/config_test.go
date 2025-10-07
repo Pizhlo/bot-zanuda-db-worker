@@ -46,8 +46,9 @@ func TestLoadConfig(t *testing.T) {
 				Operations: operation.OperationConfig{
 					Operations: []operation.Operation{
 						{
-							Name: "create_notes",
-							Type: operation.OperationTypeCreate,
+							Name:    "create_notes",
+							Type:    operation.OperationTypeCreate,
+							Timeout: 10000,
 							Storages: []operation.Storage{
 								{
 									Name:  "postgres_notes",

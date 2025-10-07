@@ -30,8 +30,8 @@ func TestReadMessages(t *testing.T) {
 						},
 					},
 				},
-				storages: []storage.Driver{
-					&mockStorage{},
+				storagesMap: map[string]storage.Driver{
+					"mock_storage": &mockStorage{},
 				},
 				msgChan:  msgChan,
 				quitChan: quitChan,

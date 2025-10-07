@@ -170,22 +170,22 @@ func initStoragesMap(ctx context.Context, cfg *config.Config) (map[string]storag
 func initStorage(ctx context.Context, storage operation.Storage) (storage.Driver, error) {
 	switch storage.Type {
 	case operation.StorageTypePostgres:
-		return initPostgresStorage(ctx, config.Postgres{
-			Host:          storage.Host,
-			Port:          storage.Port,
-			User:          storage.User,
-			Password:      storage.Password,
-			DBName:        storage.DBName,
-			InsertTimeout: storage.InsertTimeout,
-			ReadTimeout:   storage.ReadTimeout,
-		}), nil
+		return initPostgresStorage(ctx, storage), nil
 	default:
 		return nil, fmt.Errorf("unknown storage type: %s", storage.Type)
 	}
 }
 
-func initPostgresStorage(ctx context.Context, cfg config.Postgres) storage.Driver {
-	addr := formatPostgresAddr(cfg)
+func initPostgresStorage(ctx context.Context, cfg operation.Storage) storage.Driver {
+	addr := formatPostgresAddr(config.Postgres{
+		Host:          cfg.Host,
+		Port:          cfg.Port,
+		User:          cfg.User,
+		Password:      cfg.Password,
+		DBName:        cfg.DBName,
+		InsertTimeout: cfg.InsertTimeout,
+		ReadTimeout:   cfg.ReadTimeout,
+	})
 
 	logrus.WithFields(logrus.Fields{
 		"host":           cfg.Host,
@@ -194,6 +194,7 @@ func initPostgresStorage(ctx context.Context, cfg config.Postgres) storage.Drive
 		"db_name":        cfg.DBName,
 		"insert_timeout": cfg.InsertTimeout,
 		"read_timeout":   cfg.ReadTimeout,
+		"name":           cfg.Name,
 	}).Info("connecting postgres")
 
 	return start(postgres.New(ctx, postgres.WithAddr(addr),
@@ -201,6 +202,7 @@ func initPostgresStorage(ctx context.Context, cfg config.Postgres) storage.Drive
 		postgres.WithReadTimeout(cfg.ReadTimeout),
 		postgres.WithInsertTimeout(cfg.InsertTimeout),
 		postgres.WithReadTimeout(cfg.ReadTimeout),
+		postgres.WithName(cfg.Name),
 	))
 }
 
@@ -253,7 +255,9 @@ func initOperation(operationCfg operation.Operation, connection worker.Worker, s
 
 func startService(err error, name string) {
 	if err != nil {
-		logrus.Fatalf("error creating %s: %+v", name, err)
+		logrus.WithFields(logrus.Fields{
+			"service": name,
+		}).Fatalf("error creating service: %+v", err)
 	}
 }
 

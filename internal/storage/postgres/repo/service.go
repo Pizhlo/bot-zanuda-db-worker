@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"db-worker/internal/config/operation"
+	"db-worker/internal/storage"
 	"errors"
 	"fmt"
 	"sync"
@@ -18,6 +20,7 @@ import (
 type Repo struct {
 	addr string
 	db   *sql.DB
+	name string
 
 	insertTimeout int
 	readTimeout   int
@@ -35,6 +38,13 @@ type RepoOption func(*Repo)
 func WithAddr(addr string) RepoOption {
 	return func(r *Repo) {
 		r.addr = addr
+	}
+}
+
+// WithName устанавливает имя репозитория.
+func WithName(name string) RepoOption {
+	return func(r *Repo) {
+		r.name = name
 	}
 }
 
@@ -66,6 +76,10 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 
 	if r.readTimeout == 0 {
 		return nil, fmt.Errorf("read timeout is required")
+	}
+
+	if r.name == "" {
+		return nil, fmt.Errorf("name is required")
 	}
 
 	if r.addr == "" {
@@ -106,6 +120,7 @@ func (db *Repo) Run(ctx context.Context) error {
 
 	logrus.WithFields(logrus.Fields{
 		"addr": db.addr,
+		"name": db.name,
 	}).Info("successfully connected postgres")
 
 	return nil
@@ -173,6 +188,16 @@ func (db *Repo) Rollback(ctx context.Context, id string) error {
 }
 
 // Exec выполняет запрос.
-func (db *Repo) Exec(ctx context.Context) error {
+func (db *Repo) Exec(ctx context.Context, req *storage.Request) error {
 	return nil
+}
+
+// Name возвращает имя репозитория.
+func (db *Repo) Name() string {
+	return db.name
+}
+
+// Type возвращает тип хранилища (PostgreSQL).
+func (db *Repo) Type() operation.StorageType {
+	return operation.StorageTypePostgres
 }

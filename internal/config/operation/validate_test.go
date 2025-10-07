@@ -525,6 +525,39 @@ func TestValidateExpectedValueConsistency(t *testing.T) {
 			wantErr: require.Error,
 		},
 		{
+			name: "positive case: bool",
+			f: Field{
+				Name: "field1",
+				Type: FieldTypeBool,
+				Validation: AggregatedValidation{
+					ExpectedValue: true,
+				},
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "negative case: bool: expected value is not bool",
+			f: Field{
+				Name: "field1",
+				Type: FieldTypeBool,
+				Validation: AggregatedValidation{
+					ExpectedValue: 123,
+				},
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: bool: expected value is not bool",
+			f: Field{
+				Name: "field1",
+				Type: FieldTypeBool,
+				Validation: AggregatedValidation{
+					ExpectedValue: "string",
+				},
+			},
+			wantErr: require.Error,
+		},
+		{
 			name: "unsupported case: unsupported field type",
 			f: Field{
 				Name: "field1",
@@ -797,6 +830,48 @@ func TestValidateExpectedValueUUID(t *testing.T) {
 			t.Parallel()
 
 			err := validateExpectedValueUUID(test.f)
+			test.wantErr(t, err)
+		})
+	}
+}
+
+func TestValidateExpectedValueBool(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		f       Field
+		wantErr require.ErrorAssertionFunc
+	}{
+		{
+			name: "positive case: bool",
+			f: Field{
+				Name: "field1",
+				Type: FieldTypeBool,
+				Validation: AggregatedValidation{
+					ExpectedValue: true,
+				},
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "negative case: bool: expected value is not bool",
+			f: Field{
+				Name: "field1",
+				Type: FieldTypeBool,
+				Validation: AggregatedValidation{
+					ExpectedValue: "string",
+				},
+			},
+			wantErr: require.Error,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateExpectedValueBool(test.f)
 			test.wantErr(t, err)
 		})
 	}

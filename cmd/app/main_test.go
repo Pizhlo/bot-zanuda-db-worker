@@ -147,16 +147,24 @@ type mockStorage struct {
 	name string
 }
 
-func (m *mockStorage) Run(ctx context.Context) error {
+func (m *mockStorage) Name() string {
+	return m.name
+}
+
+func (m *mockStorage) Run(_ context.Context) error {
 	return nil
 }
 
-func (m *mockStorage) Exec(ctx context.Context) error {
+func (m *mockStorage) Exec(_ context.Context, _ *storage.Request) error {
 	return nil
 }
 
-func (m *mockStorage) Stop(ctx context.Context) error {
+func (m *mockStorage) Stop(_ context.Context) error {
 	return nil
+}
+
+func (m *mockStorage) Type() operation.StorageType {
+	return operation.StorageTypePostgres
 }
 
 type mockWorker struct {

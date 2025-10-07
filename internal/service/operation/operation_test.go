@@ -17,12 +17,20 @@ func (m *mockStorage) Run(_ context.Context) error {
 	return nil
 }
 
-func (m *mockStorage) Exec(_ context.Context) error {
+func (m *mockStorage) Exec(_ context.Context, _ *storage.Request) error {
 	return nil
 }
 
 func (m *mockStorage) Stop(_ context.Context) error {
 	return nil
+}
+
+func (m *mockStorage) Name() string {
+	return "mock_storage"
+}
+
+func (m *mockStorage) Type() operation.StorageType {
+	return operation.StorageTypePostgres
 }
 
 //nolint:funlen // это тест
@@ -48,8 +56,8 @@ func TestNew(t *testing.T) {
 			},
 			want: &Service{
 				cfg: &operation.Operation{},
-				storages: []storage.Driver{
-					&mockStorage{},
+				storagesMap: map[string]storage.Driver{
+					"mock_storage": &mockStorage{},
 				},
 				msgChan:  msgChan,
 				quitChan: make(chan struct{}),
@@ -66,8 +74,8 @@ func TestNew(t *testing.T) {
 			},
 			want: &Service{
 				cfg: &operation.Operation{},
-				storages: []storage.Driver{
-					&mockStorage{},
+				storagesMap: map[string]storage.Driver{
+					"mock_storage": &mockStorage{},
 				},
 				msgChan:  msgChan,
 				quitChan: make(chan struct{}),
