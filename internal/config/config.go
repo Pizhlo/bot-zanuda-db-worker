@@ -31,7 +31,7 @@ type Config struct {
 		Postgres   Postgres `yaml:"postgres"`
 	} `yaml:"storage"`
 
-	Operations operation.OperationConfig
+	Operations operation.OperationConfig `validate:"-"` // валидируется в LoadOperationConfig
 }
 
 // LoadConfig загружает конфигурацию.

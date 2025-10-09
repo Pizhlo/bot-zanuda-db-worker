@@ -43,8 +43,10 @@ type Operation struct {
 	Storages []Storage `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
 	Fields   []Field   `yaml:"fields" validate:"required,dive"`
 	Request  Request   `yaml:"request" validate:"required"`
+	Where    []Where   `yaml:"where" validate:"omitempty"` // условие, по которому будет выполнена операция. Только для операций update и delete
 
-	FieldsMap map[string]Field `yaml:"-" validate:"-"`
+	FieldsMap      map[string]Field      `yaml:"-" validate:"-"`
+	WhereFieldsMap map[string]WhereField `yaml:"-" validate:"-"`
 }
 
 // ConnectionType - тип соединения.
@@ -139,6 +141,8 @@ type Request struct {
 }
 
 // LoadOperation загружает конфигурацию операции.
+//
+//nolint:gocognit,funlen // заведена задача BZ-36.
 func LoadOperation(path string) (OperationConfig, error) {
 	yamlFile, err := os.ReadFile(path) //nolint:gosec // заведена задача BZ-17
 	if err != nil {
@@ -152,14 +156,10 @@ func LoadOperation(path string) (OperationConfig, error) {
 		return OperationConfig{}, fmt.Errorf("error unmarshalling file: %w", err)
 	}
 
-	err = validator.New().Struct(operationConfig)
-	if err != nil {
-		return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
-	}
-
 	operationConfig.mapStorages()
 	operationConfig.mapConnections()
 
+	// собираем все валидации в одну структуру для дальнейшей работы
 	for i, operation := range operationConfig.Operations {
 		for j, field := range operation.Fields {
 			field, err = aggregateValidation(operation.Name, field)
@@ -177,7 +177,8 @@ func LoadOperation(path string) (OperationConfig, error) {
 	logrus.WithField("count", len(operationConfig.Connections)).Info("loaded connections")
 	logrus.WithField("count", len(operationConfig.Storages)).Info("loaded storages")
 
-	for _, operation := range operationConfig.Operations {
+	// валидируем конфигурацию операций
+	for i, operation := range operationConfig.Operations {
 		for _, field := range operation.Fields {
 			err = validateFieldConfig(field)
 			if err != nil {
@@ -185,7 +186,28 @@ func LoadOperation(path string) (OperationConfig, error) {
 			}
 		}
 
+		// создаем мапу полей для быстрого доступа
 		operation.mapFieldsByOperation()
+
+		// валидируем условие where
+		err = operation.validateWhereCondition()
+		if err != nil {
+			return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
+		}
+
+		operation.WhereFieldsMap = make(map[string]WhereField)
+		for _, where := range operation.Where {
+			operation.mapWhereFields(where)
+		}
+
+		operationConfig.Operations[i] = operation
+	}
+
+	v := validator.New()
+
+	err = v.Struct(operationConfig)
+	if err != nil {
+		return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
 	}
 
 	return operationConfig, nil

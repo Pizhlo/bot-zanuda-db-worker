@@ -279,3 +279,97 @@ func validateExpectedValueBool(f Field) error {
 
 	return nil
 }
+
+// validateWhereConditions валидирует согласованность количества полей и наличия оператора в условиях where.
+//   - если в условии одно поле, operator type должен отсутствовать (пустая строка)
+//   - если полей больше одного, operator type обязателен
+//   - если заполнено value в where, то в сообщении должно быть такое же значение
+//   - where недопустимо для операций create
+//
+// WARNING: запускать после того, как отработал метод mapFieldsByOperation.
+func (op *Operation) validateWhereCondition() error {
+	if op.Type == OperationTypeCreate && len(op.Where) > 0 {
+		return fmt.Errorf("where condition: operation %q: where is not allowed for create operation", op.Name)
+	}
+
+	for i, w := range op.Where {
+		if err := validateWhereCondition(w, op.FieldsMap, op.Name, i); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateWhereCondition(w Where, fieldsMap map[string]Field, opName string, idx int) error {
+	// когда объединены несколько условий
+	if len(w.Conditions) > 0 {
+		return validateMultipleWhereCondition(w, fieldsMap, opName, idx)
+	}
+
+	// одно условие
+	return validateSingleWhereCondition(w, fieldsMap, opName, idx)
+}
+
+// для случая, когда одно условие.
+func validateSingleWhereCondition(w Where, fieldsMap map[string]Field, opName string, idx int) error {
+	fieldsCount := len(w.Fields)
+
+	if fieldsCount == 0 {
+		return nil
+	}
+
+	// если поле одно, то type должен отсутствовать (where user_id = 10)
+	if fieldsCount == 1 && w.Type != "" {
+		return fmt.Errorf("where condition %d: operation %q: type is not empty, but fields count is 1", idx, opName)
+	}
+
+	// если полей больше одного, то type должен присутствовать (where user_id = 10 and name = "test")
+	if fieldsCount > 1 && w.Type == "" {
+		return fmt.Errorf("where condition %d: operation %q: type is empty, but fields count is > 1", idx, opName)
+	}
+
+	for _, whereField := range w.Fields {
+		if err := validateWhereField(whereField, fieldsMap, opName, idx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateWhereField(whereField WhereField, fieldsMap map[string]Field, opName string, idx int) error {
+	// достаем обычное поле из сообщения
+	field, ok := fieldsMap[whereField.Name]
+	if !ok {
+		return fmt.Errorf("where condition %d: operation %q: field %q is not found", idx, opName, whereField.Name)
+	}
+
+	// проверяем, что value и expected_value совпадают (если заполнены)
+	if whereField.Value != nil {
+		if field.Validation.ExpectedValue == nil {
+			return fmt.Errorf("where condition %d: operation %q: expected value is not set for field %q, but set in where condition", idx, opName, whereField.Name)
+		}
+
+		if whereField.Value != field.Validation.ExpectedValue {
+			return fmt.Errorf("where condition %d: operation %q: value is not equal to expected value for field %q", idx, opName, whereField.Name)
+		}
+	}
+
+	return nil
+}
+
+// для случая, когда объединены несколько условий.
+func validateMultipleWhereCondition(w Where, fieldsMap map[string]Field, opName string, idx int) error {
+	if w.Type == "" {
+		return fmt.Errorf("where condition %d: operation %q: type is empty", idx, opName)
+	}
+
+	for _, condition := range w.Conditions {
+		if err := validateSingleWhereCondition(condition, fieldsMap, opName, idx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
