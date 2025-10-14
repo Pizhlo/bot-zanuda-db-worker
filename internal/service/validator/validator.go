@@ -81,7 +81,7 @@ func validateInt64(field operation.Field, val any) error {
 func validateFloat64(field operation.Field, val any) error {
 	v, ok := val.(float64)
 	if !ok {
-		return fmt.Errorf("field %s is not a float64", field.Name)
+		return fmt.Errorf("field %q is not a float64", field.Name)
 	}
 
 	return validateFloat64Value(field, v)
@@ -90,7 +90,7 @@ func validateFloat64(field operation.Field, val any) error {
 func validateBool(field operation.Field, val any) error {
 	v, ok := val.(bool)
 	if !ok {
-		return fmt.Errorf("field %s is not a bool", field.Name)
+		return fmt.Errorf("field %q is not a bool", field.Name)
 	}
 
 	return validateBoolValue(field, v)
@@ -99,12 +99,12 @@ func validateBool(field operation.Field, val any) error {
 func validateUUID(field operation.Field, val any) error {
 	v, ok := val.(uuid.UUID)
 	if !ok {
-		return fmt.Errorf("field %s is not a uuid", field.Name)
+		return fmt.Errorf("field %q is not a uuid", field.Name)
 	}
 
 	_, err := uuid.Parse(v.String())
 	if err != nil {
-		return fmt.Errorf("field %s must be a valid uuid", field.Name)
+		return fmt.Errorf("field %q must be a valid uuid", field.Name)
 	}
 
 	// здесь нет валидации, т.к. uuid.Parse покрывает все случаи
@@ -115,7 +115,7 @@ func validateUUID(field operation.Field, val any) error {
 func validateString(field operation.Field, val any) error {
 	v, ok := val.(string)
 	if !ok {
-		return fmt.Errorf("field %s is not a string", field.Name)
+		return fmt.Errorf("field %q is not a string", field.Name)
 	}
 
 	return validateStringValue(field, v)

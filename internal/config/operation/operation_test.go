@@ -47,15 +47,279 @@ func TestLoadOperation(t *testing.T) {
 						Request: Request{
 							From: "rabbit_notes_create",
 						},
+						FieldsMap: map[string]Field{
+							"user_id": {
+								Name:     "user_id",
+								Type:     FieldTypeInt64,
+								Required: true,
+							},
+							"text": {
+								Name:     "text",
+								Type:     FieldTypeString,
+								Required: true,
+							},
+						},
+						WhereFieldsMap:  make(map[string]WhereField),
+						UpdateFieldsMap: make(map[string]Field),
+					},
+					{
+						Name:    "update_users",
+						Type:    OperationTypeUpdate,
+						Timeout: 500,
+						Storages: []Storage{
+							{
+								Name:  "postgres_users",
+								Table: "users.users",
+							},
+						},
+						Fields: []Field{
+							{
+								Name:     "user_id",
+								Type:     FieldTypeInt64,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeMin,
+										Value: 10000,
+									},
+								},
+								Validation: AggregatedValidation{
+									Min: fromValToPointer(t, 10000),
+								},
+							},
+							{
+								Name:     "name",
+								Type:     FieldTypeString,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type: ValidationTypeNotEmpty,
+									},
+								},
+								Validation: AggregatedValidation{
+									NotEmpty: true,
+								},
+							},
+							{
+								Name:     "email",
+								Type:     FieldTypeString,
+								Required: true,
+								Update:   true,
+								ValidationsList: []Validation{
+									{
+										Type: ValidationTypeNotEmpty,
+									},
+								},
+								Validation: AggregatedValidation{
+									NotEmpty: true,
+								},
+							},
+							{
+								Name:     "age",
+								Type:     FieldTypeInt64,
+								Required: true,
+								Update:   true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeMin,
+										Value: 18,
+									},
+									{
+										Type:  ValidationTypeMax,
+										Value: 100,
+									},
+								},
+								Validation: AggregatedValidation{
+									Min: fromValToPointer(t, 18),
+									Max: fromValToPointer(t, 100),
+								},
+							},
+							{
+								Name:     "is_active",
+								Type:     FieldTypeBool,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeExpectedValue,
+										Value: true,
+									},
+								},
+								Validation: AggregatedValidation{
+									ExpectedValue: true,
+								},
+							},
+						},
+						Request: Request{
+							From: "rabbit_users_update",
+						},
+						FieldsMap: map[string]Field{
+							"user_id": {
+								Name:     "user_id",
+								Type:     FieldTypeInt64,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeMin,
+										Value: 10000,
+									},
+								},
+								Validation: AggregatedValidation{
+									Min: fromValToPointer(t, 10000),
+								},
+							},
+							"name": {
+								Name:     "name",
+								Type:     FieldTypeString,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type: ValidationTypeNotEmpty,
+									},
+								},
+								Validation: AggregatedValidation{
+									NotEmpty: true,
+								},
+							},
+							"email": {
+								Name:     "email",
+								Type:     FieldTypeString,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type: ValidationTypeNotEmpty,
+									},
+								},
+								Validation: AggregatedValidation{
+									NotEmpty: true,
+								},
+								Update: true,
+							},
+							"age": {
+								Name:     "age",
+								Type:     FieldTypeInt64,
+								Required: true,
+								Update:   true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeMin,
+										Value: 18,
+									},
+									{
+										Type:  ValidationTypeMax,
+										Value: 100,
+									},
+								},
+								Validation: AggregatedValidation{
+									Min: fromValToPointer(t, 18),
+									Max: fromValToPointer(t, 100),
+								},
+							},
+							"is_active": {
+								Name:     "is_active",
+								Type:     FieldTypeBool,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeExpectedValue,
+										Value: true,
+									},
+								},
+								Validation: AggregatedValidation{
+									ExpectedValue: true,
+								},
+							},
+						},
+						WhereFieldsMap: map[string]WhereField{
+							"user_id": {
+								Field:    Field{Name: "user_id", Type: FieldTypeInt64, Required: false},
+								Operator: OperatorEqual,
+								Value:    interface{}(nil),
+							},
+							"name": {
+								Field:    Field{Name: "name", Type: FieldTypeString, Required: false},
+								Operator: OperatorEqual,
+								Value:    interface{}(nil),
+							},
+							"is_active": {
+								Field:    Field{Name: "is_active", Type: FieldTypeBool, Required: false},
+								Operator: OperatorEqual,
+								Value:    true,
+							},
+						},
+						UpdateFieldsMap: map[string]Field{
+							"email": {
+								Name:     "email",
+								Type:     FieldTypeString,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type: ValidationTypeNotEmpty,
+									},
+								},
+								Validation: AggregatedValidation{
+									NotEmpty: true,
+								},
+								Update: true,
+							},
+							"age": {
+								Name:     "age",
+								Type:     FieldTypeInt64,
+								Required: true,
+								ValidationsList: []Validation{
+									{
+										Type:  ValidationTypeMin,
+										Value: 18,
+									},
+									{
+										Type:  ValidationTypeMax,
+										Value: 100,
+									},
+								},
+								Validation: AggregatedValidation{
+									Min: fromValToPointer(t, 18),
+									Max: fromValToPointer(t, 100),
+								},
+								Update: true,
+							},
+						},
+						Where: []Where{
+							{
+								Type:   "and",
+								Fields: []WhereField(nil),
+								Conditions: []Where{
+									{
+										Type: "and",
+										Fields: []WhereField{
+											{Field: Field{Name: "user_id", Type: FieldTypeInt64, Required: false}, Operator: OperatorEqual, Value: interface{}(nil)},
+											{Field: Field{Name: "name", Type: FieldTypeString, Required: false}, Operator: OperatorEqual, Value: interface{}(nil)},
+										},
+									},
+									{
+										Fields: []WhereField{
+											{Field: Field{Name: "is_active", Type: FieldTypeBool, Required: false}, Operator: OperatorEqual, Value: true},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				Connections: []Connection{
 					{
 						Name:          "rabbit_notes_create",
 						Type:          ConnectionTypeRabbitMQ,
-						Address:       "amqp://user:password@localhost:1234/",
+						Address:       "amqp://<user>:<password>@localhost:1234/",
 						Queue:         "notes",
 						RoutingKey:    "create",
+						InsertTimeout: 1,
+						ReadTimeout:   1,
+					},
+					{
+						Name:          "rabbit_users_update",
+						Type:          ConnectionTypeRabbitMQ,
+						Address:       "amqp://<user>:<password>@localhost:1234/",
+						Queue:         "users_update_queue",
+						RoutingKey:    "update",
 						InsertTimeout: 1,
 						ReadTimeout:   1,
 					},
@@ -68,7 +332,18 @@ func TestLoadOperation(t *testing.T) {
 						Port:          5432,
 						User:          "user",
 						Password:      "password",
-						DBName:        "test",
+						DBName:        "test1",
+						InsertTimeout: 5000000,
+						ReadTimeout:   5000000,
+					},
+					{
+						Name:          "postgres_users",
+						Type:          StorageTypePostgres,
+						Host:          "10.8.0.1",
+						Port:          5435,
+						User:          "user",
+						Password:      "password",
+						DBName:        "test2",
 						InsertTimeout: 5000000,
 						ReadTimeout:   5000000,
 					},
@@ -81,7 +356,18 @@ func TestLoadOperation(t *testing.T) {
 						Port:          5432,
 						User:          "user",
 						Password:      "password",
-						DBName:        "test",
+						DBName:        "test1",
+						InsertTimeout: 5000000,
+						ReadTimeout:   5000000,
+					},
+					"postgres_users": {
+						Name:          "postgres_users",
+						Type:          StorageTypePostgres,
+						Host:          "10.8.0.1",
+						Port:          5435,
+						User:          "user",
+						Password:      "password",
+						DBName:        "test2",
 						InsertTimeout: 5000000,
 						ReadTimeout:   5000000,
 					},
@@ -90,9 +376,18 @@ func TestLoadOperation(t *testing.T) {
 					"rabbit_notes_create": {
 						Name:          "rabbit_notes_create",
 						Type:          ConnectionTypeRabbitMQ,
-						Address:       "amqp://user:password@localhost:1234/",
+						Address:       "amqp://<user>:<password>@localhost:1234/",
 						Queue:         "notes",
 						RoutingKey:    "create",
+						InsertTimeout: 1,
+						ReadTimeout:   1,
+					},
+					"rabbit_users_update": {
+						Name:          "rabbit_users_update",
+						Type:          ConnectionTypeRabbitMQ,
+						Address:       "amqp://<user>:<password>@localhost:1234/",
+						Queue:         "users_update_queue",
+						RoutingKey:    "update",
 						InsertTimeout: 1,
 						ReadTimeout:   1,
 					},
@@ -103,6 +398,16 @@ func TestLoadOperation(t *testing.T) {
 		{
 			name:    "invalid operations",
 			path:    "./testdata/invalid_operations.yaml",
+			wantErr: require.Error,
+		},
+		{
+			name:    "no update fields",
+			path:    "./testdata/no_update_fields.yaml",
+			wantErr: require.Error,
+		},
+		{
+			name:    "error aggregating validation",
+			path:    "./testdata/error_aggregating_validation.yaml",
 			wantErr: require.Error,
 		},
 	}

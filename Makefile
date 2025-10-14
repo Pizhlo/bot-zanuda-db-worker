@@ -42,7 +42,7 @@ lint:
 
 test:
 	@echo "> testing..."
-	go test -gcflags="-l" -race -v ./...
+	go test -cover -gcflags="-l" -race -v ./...
 	@echo "> successfully finished"
 
 all:	

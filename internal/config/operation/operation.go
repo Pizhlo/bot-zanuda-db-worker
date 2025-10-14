@@ -43,8 +43,11 @@ type Operation struct {
 	Storages []Storage `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
 	Fields   []Field   `yaml:"fields" validate:"required,dive"`
 	Request  Request   `yaml:"request" validate:"required"`
+	Where    []Where   `yaml:"where" validate:"omitempty"` // условие, по которому будет выполнена операция. Только для операций update и delete
 
-	FieldsMap map[string]Field `yaml:"-" validate:"-"`
+	FieldsMap       map[string]Field      `yaml:"-" validate:"-"`
+	WhereFieldsMap  map[string]WhereField `yaml:"-" validate:"-"`
+	UpdateFieldsMap map[string]Field      `yaml:"-" validate:"-"` // поля, которые будут обновляться (при update операции)
 }
 
 // ConnectionType - тип соединения.
@@ -121,6 +124,7 @@ type Field struct {
 	Required        bool                 `yaml:"required"`
 	ValidationsList []Validation         `yaml:"validation" validate:"omitempty,dive"`
 	Validation      AggregatedValidation `yaml:"-" validate:"-"` // все валидации, которые будут применены к полю
+	Update          bool                 `yaml:"update"`         // будет ли поле обновляться (при update операции)
 }
 
 // AggregatedValidation - все валидации, которые будут применены к полю.
@@ -139,6 +143,8 @@ type Request struct {
 }
 
 // LoadOperation загружает конфигурацию операции.
+//
+//nolint:gocognit,funlen,cyclop // заведена задача BZ-36.
 func LoadOperation(path string) (OperationConfig, error) {
 	yamlFile, err := os.ReadFile(path) //nolint:gosec // заведена задача BZ-17
 	if err != nil {
@@ -152,14 +158,10 @@ func LoadOperation(path string) (OperationConfig, error) {
 		return OperationConfig{}, fmt.Errorf("error unmarshalling file: %w", err)
 	}
 
-	err = validator.New().Struct(operationConfig)
-	if err != nil {
-		return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
-	}
-
 	operationConfig.mapStorages()
 	operationConfig.mapConnections()
 
+	// собираем все валидации в одну структуру для дальнейшей работы
 	for i, operation := range operationConfig.Operations {
 		for j, field := range operation.Fields {
 			field, err = aggregateValidation(operation.Name, field)
@@ -177,15 +179,54 @@ func LoadOperation(path string) (OperationConfig, error) {
 	logrus.WithField("count", len(operationConfig.Connections)).Info("loaded connections")
 	logrus.WithField("count", len(operationConfig.Storages)).Info("loaded storages")
 
-	for _, operation := range operationConfig.Operations {
+	// валидируем конфигурацию операций
+	for i, operation := range operationConfig.Operations {
 		for _, field := range operation.Fields {
 			err = validateFieldConfig(field)
 			if err != nil {
-				return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
+				return OperationConfig{}, fmt.Errorf("operation %q: error validating field: %w", operation.Name, err)
 			}
 		}
 
+		// создаем мапу полей для быстрого доступа
 		operation.mapFieldsByOperation()
+
+		// валидируем условие where
+		err = operation.validateWhereCondition()
+		if err != nil {
+			return OperationConfig{}, fmt.Errorf("operation %q: error validating where condition: %w", operation.Name, err)
+		}
+
+		operation.WhereFieldsMap = make(map[string]WhereField)
+		operation.UpdateFieldsMap = make(map[string]Field)
+
+		for _, where := range operation.Where {
+			operation.mapWhereFields(where)
+		}
+
+		operation.mapFieldsUpdate()
+
+		if operation.Type == OperationTypeUpdate && len(operation.Where) > 0 {
+			if len(operation.UpdateFieldsMap) == 0 {
+				return OperationConfig{}, fmt.Errorf("operation %q: no update fields", operation.Name)
+			}
+		}
+
+		for _, where := range operation.Where {
+			err = operation.validateWhereFieldUpdate(where)
+			if err != nil {
+				return OperationConfig{}, fmt.Errorf("operation %q: error validating update fields: %w", operation.Name, err)
+			}
+		}
+
+		operationConfig.Operations[i] = operation
+	}
+
+	v := validator.New()
+
+	err = v.Struct(operationConfig)
+	if err != nil {
+		return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
 	}
 
 	return operationConfig, nil

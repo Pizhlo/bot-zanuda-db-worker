@@ -46,7 +46,11 @@ func (s *Service) readMessages(ctx context.Context) {
 			}
 
 			if err := s.processMessage(ctx, msg); err != nil {
-				logrus.WithError(err).Error("operation: error process message")
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"name":       s.cfg.Name,
+					"connection": s.cfg.Request.From,
+				}).Error("operation: error process message")
+
 				continue
 			}
 
@@ -78,7 +82,10 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]interface{}
 		"connection": s.cfg.Request.From,
 	}).Debug("operation: message validated")
 
-	requests := s.buildRequest(msg)
+	requests, err := s.buildRequest(msg)
+	if err != nil {
+		return fmt.Errorf("error build requests: %w", err)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(len(requests))
@@ -108,6 +115,13 @@ func (s *Service) execRequest(ctx context.Context, req *request) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.Timeout)*time.Millisecond)
 	defer cancel()
 
+	logrus.WithFields(logrus.Fields{
+		"name":       s.cfg.Name,
+		"request":    req.request.Val,
+		"values":     req.request.Args,
+		"connection": s.cfg.Request.From,
+	}).Debug("operation: exec request")
+
 	err := req.storage.driver.Exec(timeoutCtx, req.request)
 	if err != nil {
 		return fmt.Errorf("error exec request: %w", err)
@@ -121,45 +135,30 @@ type request struct {
 	request *storage.Request
 }
 
-func (s *Service) buildRequest(msg map[string]interface{}) []request {
+func (s *Service) buildRequest(msg map[string]interface{}) ([]request, error) {
 	res := make([]request, 0, len(s.storagesMap))
 
 	for _, storage := range s.driversMap {
-		var builder builder_pkg.Builder
+		var (
+			builder builder_pkg.Builder
+			err     error
+		)
 
-		switch storage.driver.Type() {
-		case operation.StorageTypePostgres:
-			builder = builder_pkg.ForPostgres()
-		default:
-			logrus.WithFields(logrus.Fields{
-				"name":    s.cfg.Name,
-				"storage": storage.driver.Name(),
-				"type":    storage.driver.Type(),
-			}).Error("operation: unknown storage type")
-
-			continue
+		builder, err = builderByStorageType(storage.driver.Type())
+		if err != nil {
+			return nil, fmt.Errorf("error get builder by storage type %q: %w", storage.driver.Type(), err)
 		}
 
 		builder = builder.WithOperation(*s.cfg).WithValues(msg).WithTable(storage.cfg.Table)
 
-		switch s.cfg.Type {
-		case operation.OperationTypeCreate:
-			builder = builder.WithCreateOperation()
-		case operation.OperationTypeUpdate:
-			// not implemented
-			continue
-		case operation.OperationTypeDelete:
-			// not implemented
-			continue
-		case operation.OperationTypeDeleteAll:
-			// not implemented
-			continue
+		builder, err = setOperationType(builder, s.cfg.Type)
+		if err != nil {
+			return nil, fmt.Errorf("error set operation type %q: %w", s.cfg.Type, err)
 		}
 
 		req, err := builder.Build()
 		if err != nil {
-			logrus.WithError(err).Errorf("operation %s: error build request", s.cfg.Name)
-			continue
+			return nil, fmt.Errorf("error build request for storage %q: %w", storage.cfg.Name, err)
 		}
 
 		res = append(res, request{
@@ -168,5 +167,25 @@ func (s *Service) buildRequest(msg map[string]interface{}) []request {
 		})
 	}
 
-	return res
+	return res, nil
+}
+
+func builderByStorageType(storageType operation.StorageType) (builder_pkg.Builder, error) {
+	switch storageType {
+	case operation.StorageTypePostgres:
+		return builder_pkg.ForPostgres(), nil
+	default:
+		return nil, fmt.Errorf("unknown storage type: %s", storageType)
+	}
+}
+
+func setOperationType(builder builder_pkg.Builder, operationType operation.Type) (builder_pkg.Builder, error) {
+	switch operationType {
+	case operation.OperationTypeCreate:
+		return builder.WithCreateOperation(), nil
+	case operation.OperationTypeUpdate:
+		return builder.WithUpdateOperation()
+	default:
+		return nil, fmt.Errorf("unknown operation type: %s", operationType)
+	}
 }

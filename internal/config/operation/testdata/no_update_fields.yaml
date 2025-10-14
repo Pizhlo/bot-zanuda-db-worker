@@ -35,14 +35,12 @@ operations: # операции, которые можно выполнить н�
           - type: not_empty
       - name: email
         type: string
-        update: true
         required: true
         validation:
           - type: not_empty
       - name: age
         type: int64
         required: true
-        update: true
         validation:
           - type: min
             value: 18

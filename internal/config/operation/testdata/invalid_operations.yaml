@@ -15,17 +15,17 @@ operations: # операции, которые можно выполнить н�
 connections: # соединения для получения сообщений
   - name: "rabbit_notes_create"
     type: rabbitmq
-    address: "amqp://user:password@localhost:1234/"
+    address: "amqp://<user>:<password>@localhost:1234/"
     queue: notes
     routing_key: create
 
 storages: # куда сохранять модели
-  - name: "postgres_notes" # куда сохранять
+  - name: "postgres_notes"
     type: postgres
     host: localhost
     port: 5432
     user: "user"
     password: "password"
-    db_name: "test"    
+    db_name: "test1"    
     insert_timeout: 5000000
     read_timeout: 5000000
