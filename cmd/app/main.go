@@ -9,6 +9,7 @@ import (
 	"db-worker/internal/service/worker/rabbit"
 	"db-worker/internal/storage"
 	postgres "db-worker/internal/storage/postgres/repo"
+	"db-worker/internal/uow"
 	"flag"
 	"fmt"
 	"os"
@@ -167,7 +168,7 @@ func initStoragesMap(ctx context.Context, cfg *config.Config) (map[string]storag
 	return storagesMap, nil
 }
 
-func initStorage(ctx context.Context, storage operation.Storage) (storage.Driver, error) {
+func initStorage(ctx context.Context, storage operation.StorageCfg) (storage.Driver, error) {
 	switch storage.Type {
 	case operation.StorageTypePostgres:
 		return initPostgresStorage(ctx, storage), nil
@@ -176,7 +177,7 @@ func initStorage(ctx context.Context, storage operation.Storage) (storage.Driver
 	}
 }
 
-func initPostgresStorage(ctx context.Context, cfg operation.Storage) storage.Driver {
+func initPostgresStorage(ctx context.Context, cfg operation.StorageCfg) storage.Driver {
 	addr := formatPostgresAddr(config.Postgres{
 		Host:          cfg.Host,
 		Port:          cfg.Port,
@@ -220,7 +221,9 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 			return nil, fmt.Errorf("error grouping storages: %w", err)
 		}
 
-		op := initOperation(operationCfg, conn, storages)
+		uow := initUow(storages, &operationCfg)
+
+		op := initOperation(operationCfg, conn, uow)
 
 		operations[operationCfg.Name] = op
 	}
@@ -228,7 +231,7 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 	return operations, nil
 }
 
-func groupStorages(storagesCfg []operation.Storage, storagesMap map[string]storage.Driver) ([]storage.Driver, error) {
+func groupStorages(storagesCfg []operation.StorageCfg, storagesMap map[string]storage.Driver) ([]storage.Driver, error) {
 	storages := make([]storage.Driver, len(storagesCfg))
 
 	for i, storageCfg := range storagesCfg {
@@ -243,11 +246,18 @@ func groupStorages(storagesCfg []operation.Storage, storagesMap map[string]stora
 	return storages, nil
 }
 
-func initOperation(operationCfg operation.Operation, connection worker.Worker, storages []storage.Driver) *operation_srv.Service {
+func initUow(storages []storage.Driver, operationCfg *operation.Operation) *uow.Service {
+	return start(uow.New(
+		uow.WithStorages(storages),
+		uow.WithCfg(operationCfg),
+	))
+}
+
+func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
-		operation_srv.WithStorages(storages),
 		operation_srv.WithMsgChan(connection.MsgChan()),
+		operation_srv.WithUow(uow),
 	))
 
 	return op

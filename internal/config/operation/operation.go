@@ -29,21 +29,21 @@ const (
 type OperationConfig struct {
 	Operations  []Operation  `yaml:"operations" validate:"required,dive"`  // операции, которые нужно выполнить над моделью
 	Connections []Connection `yaml:"connections" validate:"required,dive"` // соединения для получения сообщений
-	Storages    []Storage    `yaml:"storages" validate:"required,dive"`    // куда сохранять модели
+	Storages    []StorageCfg `yaml:"storages" validate:"required,dive"`    // куда сохранять модели
 
-	StoragesMap    map[string]Storage
+	StoragesMap    map[string]StorageCfg
 	ConnectionsMap map[string]Connection
 }
 
 // Operation - операция, которая будет выполнена над моделью.
 type Operation struct {
-	Name     string    `yaml:"name" validate:"required"`
-	Timeout  int       `yaml:"timeout" validate:"required,min=1"` // время ожидания операции в миллисекундах
-	Type     Type      `yaml:"type" validate:"required,oneof=create update delete delete_all"`
-	Storages []Storage `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
-	Fields   []Field   `yaml:"fields" validate:"required,dive"`
-	Request  Request   `yaml:"request" validate:"required"`
-	Where    []Where   `yaml:"where" validate:"omitempty"` // условие, по которому будет выполнена операция. Только для операций update и delete
+	Name     string       `yaml:"name" validate:"required"`
+	Timeout  int          `yaml:"timeout" validate:"required,min=1"` // время ожидания операции в миллисекундах
+	Type     Type         `yaml:"type" validate:"required,oneof=create update delete delete_all"`
+	Storages []StorageCfg `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
+	Fields   []Field      `yaml:"fields" validate:"required,dive"`
+	Request  Request      `yaml:"request" validate:"required"`
+	Where    []Where      `yaml:"where" validate:"omitempty"` // условие, по которому будет выполнена операция. Только для операций update и delete
 
 	FieldsMap       map[string]Field      `yaml:"-" validate:"-"`
 	WhereFieldsMap  map[string]WhereField `yaml:"-" validate:"-"`
@@ -79,8 +79,8 @@ const (
 	StorageTypeRabbitMQ StorageType = "rabbitmq"
 )
 
-// Storage - хранилище, куда будут сохраняться модели.
-type Storage struct {
+// StorageCfg - хранилище, куда будут сохраняться модели.
+type StorageCfg struct {
 	Name string      `yaml:"name"`
 	Type StorageType `yaml:"type"`
 
@@ -233,7 +233,7 @@ func LoadOperation(path string) (OperationConfig, error) {
 }
 
 func (oc *OperationConfig) mapStorages() {
-	oc.StoragesMap = make(map[string]Storage)
+	oc.StoragesMap = make(map[string]StorageCfg)
 
 	for _, storage := range oc.Storages {
 		oc.StoragesMap[storage.Name] = storage

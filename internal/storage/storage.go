@@ -12,6 +12,9 @@ type Driver interface {
 	Stop(ctx context.Context) error
 	Type() operation.StorageType
 	Name() string
+	Commit(ctx context.Context, id string) error
+	Rollback(ctx context.Context, id string) error
+	Begin(ctx context.Context, id string) error
 }
 
 // Request - запрос к хранилищу.
