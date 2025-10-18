@@ -126,8 +126,8 @@ func (db *Repo) Run(ctx context.Context) error {
 	return nil
 }
 
-// BeginTx начинает транзакцию.
-func (db *Repo) BeginTx(ctx context.Context, id string) error {
+// Begin начинает транзакцию.
+func (db *Repo) Begin(ctx context.Context, id string) error {
 	if _, err := db.getTx(id); err == nil {
 		return nil
 	}

@@ -21,6 +21,7 @@ func TestValidateMessage(t *testing.T) {
 		{
 			name: "positive case",
 			svc: &Service{
+				uow: &mockUnitOfWork{},
 				cfg: &operation.Operation{
 					Name: "test",
 					Fields: []operation.Field{
@@ -28,12 +29,6 @@ func TestValidateMessage(t *testing.T) {
 							Name: "field1",
 							Type: "string",
 						},
-					},
-				},
-				mapFields: map[string]operation.Field{
-					"field1": {
-						Name: "field1",
-						Type: "string",
 					},
 				},
 			},
@@ -54,12 +49,6 @@ func TestValidateMessage(t *testing.T) {
 						},
 					},
 				},
-				mapFields: map[string]operation.Field{
-					"field1": {
-						Name: "field1",
-						Type: "string",
-					},
-				},
 			},
 			msg:     map[string]interface{}{},
 			wantErr: require.Error,
@@ -74,12 +63,6 @@ func TestValidateMessage(t *testing.T) {
 							Name: "field1",
 							Type: "string",
 						},
-					},
-				},
-				mapFields: map[string]operation.Field{
-					"field1": {
-						Name: "field1",
-						Type: "string",
 					},
 				},
 			},
@@ -109,20 +92,6 @@ func TestValidateMessage(t *testing.T) {
 							Type:     "float64",
 							Required: false,
 						},
-					},
-				},
-				mapFields: map[string]operation.Field{
-					"field1": {
-						Name: "field1",
-						Type: "string",
-					},
-					"field2": {
-						Name: "field2",
-						Type: "int64",
-					},
-					"field3": {
-						Name: "field3",
-						Type: "float64",
 					},
 				},
 			},

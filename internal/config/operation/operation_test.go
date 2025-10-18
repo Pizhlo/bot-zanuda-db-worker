@@ -26,7 +26,7 @@ func TestLoadOperation(t *testing.T) {
 						Name:    "create_notes",
 						Timeout: 10000,
 						Type:    OperationTypeCreate,
-						Storages: []Storage{
+						Storages: []StorageCfg{
 							{
 								Name:  "postgres_notes",
 								Table: "notes.notes",
@@ -66,7 +66,7 @@ func TestLoadOperation(t *testing.T) {
 						Name:    "update_users",
 						Type:    OperationTypeUpdate,
 						Timeout: 500,
-						Storages: []Storage{
+						Storages: []StorageCfg{
 							{
 								Name:  "postgres_users",
 								Table: "users.users",
@@ -324,7 +324,7 @@ func TestLoadOperation(t *testing.T) {
 						ReadTimeout:   1,
 					},
 				},
-				Storages: []Storage{
+				Storages: []StorageCfg{
 					{
 						Name:          "postgres_notes",
 						Type:          StorageTypePostgres,
@@ -348,7 +348,7 @@ func TestLoadOperation(t *testing.T) {
 						ReadTimeout:   5000000,
 					},
 				},
-				StoragesMap: map[string]Storage{
+				StoragesMap: map[string]StorageCfg{
 					"postgres_notes": {
 						Name:          "postgres_notes",
 						Type:          StorageTypePostgres,
@@ -428,7 +428,7 @@ func TestMapStorages(t *testing.T) {
 	t.Parallel()
 
 	op := OperationConfig{
-		Storages: []Storage{
+		Storages: []StorageCfg{
 			{
 				Name:          "postgres_notes",
 				Type:          StorageTypePostgres,
@@ -465,7 +465,7 @@ func TestMapStorages(t *testing.T) {
 		},
 	}
 
-	expected := map[string]Storage{
+	expected := map[string]StorageCfg{
 		"postgres_notes": {
 			Name:          "postgres_notes",
 			Type:          StorageTypePostgres,
