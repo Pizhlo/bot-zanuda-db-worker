@@ -126,8 +126,8 @@ func (db *Repo) Run(ctx context.Context) error {
 	return nil
 }
 
-// BeginTx начинает транзакцию.
-func (db *Repo) BeginTx(ctx context.Context, id string) error {
+// Begin начинает транзакцию.
+func (db *Repo) Begin(ctx context.Context, id string) error {
 	if _, err := db.getTx(id); err == nil {
 		return nil
 	}
@@ -187,8 +187,24 @@ func (db *Repo) Rollback(ctx context.Context, id string) error {
 	return nil
 }
 
+// FinishTx завершает транзакцию без коммита (cleanup при неуспехе begin в другом драйвере).
+func (db *Repo) FinishTx(ctx context.Context, id string) error {
+	db.transaction.mu.Lock()
+	defer db.transaction.mu.Unlock()
+
+	tx, ok := db.transaction.tx[id]
+	if !ok {
+		return nil // ничего не делаем — уже очищено
+	}
+	// Игнорируем ошибку Rollback — цель: гарантированно освободить ресурсы
+	_ = tx.Rollback()
+	delete(db.transaction.tx, id)
+
+	return nil
+}
+
 // Exec выполняет запрос.
-func (db *Repo) Exec(ctx context.Context, req *storage.Request) error {
+func (db *Repo) Exec(ctx context.Context, req *storage.Request, id string) error {
 	return nil
 }
 

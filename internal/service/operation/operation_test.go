@@ -4,38 +4,66 @@ import (
 	"context"
 	"db-worker/internal/config/operation"
 	"db-worker/internal/storage"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type mockStorage struct {
+type mockUnitOfWork struct {
+	buildRequest bool
+	execRequests bool
+
+	execChan chan struct{} // сообщение о том, что запросы выполнены
+
+	execError  error
+	buildError error
+
+	mu sync.Mutex
 }
 
-func (m *mockStorage) Run(_ context.Context) error {
-	return nil
+func (m *mockUnitOfWork) BuildRequests(msg map[string]interface{}) (map[storage.Driver]*storage.Request, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.buildRequest = true
+
+	return nil, m.buildError
 }
 
-func (m *mockStorage) Exec(_ context.Context, _ *storage.Request) error {
-	return nil
+func (m *mockUnitOfWork) ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.execChan != nil {
+		m.execChan <- struct{}{}
+	}
+
+	m.execRequests = true
+
+	return m.execError
 }
 
-func (m *mockStorage) Stop(_ context.Context) error {
-	return nil
+func (m *mockUnitOfWork) getBuildRequest() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.buildRequest
 }
 
-func (m *mockStorage) Name() string {
-	return "mock_storage"
-}
+func (m *mockUnitOfWork) getExecRequests() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-func (m *mockStorage) Type() operation.StorageType {
-	return operation.StorageTypePostgres
+	return m.execRequests
 }
 
 //nolint:funlen // это тест
 func TestNew(t *testing.T) {
 	t.Parallel()
+
+	uow := &mockUnitOfWork{}
 
 	msgChan := make(chan map[string]interface{})
 
@@ -49,44 +77,26 @@ func TestNew(t *testing.T) {
 			name: "positive case",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
-				WithStorages([]storage.Driver{
-					&mockStorage{},
-				}),
 				WithMsgChan(msgChan),
+				WithUow(uow),
 			},
 			want: &Service{
-				cfg: &operation.Operation{},
-				storagesMap: map[string]storage.Driver{
-					"mock_storage": &mockStorage{},
-				},
+				cfg:      &operation.Operation{},
 				msgChan:  msgChan,
 				quitChan: make(chan struct{}),
+				uow:      uow,
 			},
 			wantErr: require.NoError,
 		},
 		{
 			name: "negative case: cfg is nil",
 			opts: []option{
-				WithStorages([]storage.Driver{
-					&mockStorage{},
-				}),
 				WithMsgChan(msgChan),
 			},
 			want: &Service{
-				cfg: &operation.Operation{},
-				storagesMap: map[string]storage.Driver{
-					"mock_storage": &mockStorage{},
-				},
+				cfg:      &operation.Operation{},
 				msgChan:  msgChan,
 				quitChan: make(chan struct{}),
-			},
-			wantErr: require.Error,
-		},
-		{
-			name: "negative case: storages are nil",
-			opts: []option{
-				WithCfg(&operation.Operation{}),
-				WithMsgChan(msgChan),
 			},
 			wantErr: require.Error,
 		},
@@ -94,9 +104,15 @@ func TestNew(t *testing.T) {
 			name: "negative case: message channel is nil",
 			opts: []option{
 				WithCfg(&operation.Operation{}),
-				WithStorages([]storage.Driver{
-					&mockStorage{},
-				}),
+				WithUow(uow),
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: uow is nil",
+			opts: []option{
+				WithCfg(&operation.Operation{}),
+				WithMsgChan(msgChan),
 			},
 			wantErr: require.Error,
 		},
@@ -110,7 +126,10 @@ func TestNew(t *testing.T) {
 			tt.wantErr(t, err)
 
 			if got != nil {
-				assert.ObjectsAreEqual(tt.want, got)
+				// Сравниваем поля по отдельности, исключая каналы
+				assert.Equal(t, tt.want.cfg, got.cfg)
+				assert.Equal(t, tt.want.msgChan, got.msgChan)
+				assert.Equal(t, tt.want.uow, got.uow)
 				assert.NotNil(t, got.quitChan)
 			}
 		})

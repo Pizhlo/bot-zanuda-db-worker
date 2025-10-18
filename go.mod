@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/huandu/go-clone v1.7.3 // indirect
 	github.com/huandu/go-sqlbuilder v1.37.0 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
