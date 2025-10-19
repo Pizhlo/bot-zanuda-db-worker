@@ -6,6 +6,7 @@ import (
 	"db-worker/internal/config/operation"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/storage"
+	"db-worker/internal/uow"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,7 +81,7 @@ func TestGroupStorages(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		storagesCfg []operation.Storage
+		storagesCfg []operation.StorageCfg
 		storageMap  map[string]storage.Driver
 		expectError bool
 		errorMsg    string
@@ -88,7 +89,7 @@ func TestGroupStorages(t *testing.T) {
 	}{
 		{
 			name: "valid storages",
-			storagesCfg: []operation.Storage{
+			storagesCfg: []operation.StorageCfg{
 				{Name: "storage1"},
 				{Name: "storage2"},
 			},
@@ -98,7 +99,7 @@ func TestGroupStorages(t *testing.T) {
 		},
 		{
 			name: "single storage",
-			storagesCfg: []operation.Storage{
+			storagesCfg: []operation.StorageCfg{
 				{Name: "storage1"},
 			},
 			storageMap:  storagesMap,
@@ -107,7 +108,7 @@ func TestGroupStorages(t *testing.T) {
 		},
 		{
 			name: "storage not found",
-			storagesCfg: []operation.Storage{
+			storagesCfg: []operation.StorageCfg{
 				{Name: "nonexistent"},
 			},
 			storageMap:  storagesMap,
@@ -116,7 +117,7 @@ func TestGroupStorages(t *testing.T) {
 		},
 		{
 			name:        "empty storages",
-			storagesCfg: []operation.Storage{},
+			storagesCfg: []operation.StorageCfg{},
 			storageMap:  storagesMap,
 			expectError: false,
 			expectedLen: 0,
@@ -155,7 +156,7 @@ func (m *mockStorage) Run(_ context.Context) error {
 	return nil
 }
 
-func (m *mockStorage) Exec(_ context.Context, _ *storage.Request) error {
+func (m *mockStorage) Exec(_ context.Context, _ *storage.Request, _ string) error {
 	return nil
 }
 
@@ -165,6 +166,22 @@ func (m *mockStorage) Stop(_ context.Context) error {
 
 func (m *mockStorage) Type() operation.StorageType {
 	return operation.StorageTypePostgres
+}
+
+func (m *mockStorage) Begin(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockStorage) Commit(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockStorage) Rollback(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockStorage) FinishTx(_ context.Context, _ string) error {
+	return nil
 }
 
 type mockWorker struct {
@@ -238,7 +255,13 @@ func TestInitOperation(t *testing.T) {
 		&mockStorage{name: "test-storage"},
 	}
 
-	srv := initOperation(cfg, connection, storages)
+	uowService, err := uow.New(
+		uow.WithStorages(storages),
+		uow.WithCfg(&cfg),
+	)
+	require.NoError(t, err)
+
+	srv := initOperation(cfg, connection, uowService)
 
 	require.NotNil(t, srv)
 }
@@ -251,7 +274,7 @@ func TestInitOperationServices(t *testing.T) {
 			Operations: []operation.Operation{
 				{
 					Name: "test-operation-1",
-					Storages: []operation.Storage{
+					Storages: []operation.StorageCfg{
 						{Name: "test-storage-1"},
 						{Name: "test-storage-2"},
 					},
@@ -260,7 +283,7 @@ func TestInitOperationServices(t *testing.T) {
 				},
 				{
 					Name: "test-operation-2",
-					Storages: []operation.Storage{
+					Storages: []operation.StorageCfg{
 						{Name: "test-storage-3"},
 						{Name: "test-storage-4"},
 					},

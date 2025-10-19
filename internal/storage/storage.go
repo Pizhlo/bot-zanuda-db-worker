@@ -8,10 +8,15 @@ import (
 // Driver определяет интерфейс для работы с хранилищем.
 type Driver interface {
 	Run(ctx context.Context) error
-	Exec(ctx context.Context, req *Request) error
+	Exec(ctx context.Context, req *Request, id string) error
 	Stop(ctx context.Context) error
 	Type() operation.StorageType
 	Name() string
+	Commit(ctx context.Context, id string) error
+	Rollback(ctx context.Context, id string) error
+	Begin(ctx context.Context, id string) error
+	// FinishTx завершает транзакцию. Используется, если не удалось начать транзакцию в одном из драйверов.
+	FinishTx(ctx context.Context, id string) error
 }
 
 // Request - запрос к хранилищу.
