@@ -162,7 +162,12 @@ func (db *Repo) Commit(ctx context.Context, id string) error {
 	db.transaction.mu.Lock()
 	defer db.transaction.mu.Unlock()
 
-	err := db.transaction.tx[id].Commit()
+	tx, ok := db.transaction.tx[id]
+	if !ok {
+		return fmt.Errorf("transaction not found")
+	}
+
+	err := tx.Commit()
 	if err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
@@ -194,8 +199,9 @@ func (db *Repo) FinishTx(ctx context.Context, id string) error {
 
 	tx, ok := db.transaction.tx[id]
 	if !ok {
-		return nil // ничего не делаем — уже очищено
+		return nil // ничего не делаем — уже очищено (либо commit, либо rollback)
 	}
+
 	// Игнорируем ошибку Rollback — цель: гарантированно освободить ресурсы
 	_ = tx.Rollback()
 	delete(db.transaction.tx, id)
@@ -205,6 +211,26 @@ func (db *Repo) FinishTx(ctx context.Context, id string) error {
 
 // Exec выполняет запрос.
 func (db *Repo) Exec(ctx context.Context, req *storage.Request, id string) error {
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
+
+	sql, ok := req.Val.(string)
+	if !ok {
+		return fmt.Errorf("request value is not a string")
+	}
+
+	args, ok := req.Args.([]any)
+	if !ok {
+		return fmt.Errorf("request arguments are not a slice of any")
+	}
+
+	_, err = tx.ExecContext(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("error executing query: %w", err)
+	}
+
 	return nil
 }
 
