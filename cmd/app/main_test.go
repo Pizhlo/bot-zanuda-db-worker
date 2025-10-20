@@ -4,9 +4,9 @@ import (
 	"context"
 	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
+	"db-worker/internal/service/uow"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/storage"
-	"db-worker/internal/uow"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
