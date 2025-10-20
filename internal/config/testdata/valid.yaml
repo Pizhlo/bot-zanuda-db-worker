@@ -13,3 +13,10 @@ storage:
     db_name: "test"    
     insert_timeout: 5000000
     read_timeout: 5000000
+
+  redis:
+    type: "single"
+    host: "localhost"
+    port: 6379
+    insert_timeout: 50
+    read_timeout: 50

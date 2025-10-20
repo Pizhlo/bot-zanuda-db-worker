@@ -21,6 +21,29 @@ type Postgres struct {
 	ReadTimeout   int    `yaml:"read_timeout" validate:"required,min=1"`
 }
 
+// RedisType - тип подключения к Redis: single - один узел, cluster - кластер.
+type RedisType string
+
+const (
+	// RedisTypeSingle - один узел.
+	RedisTypeSingle RedisType = "single"
+	// RedisTypeCluster - кластер.
+	RedisTypeCluster RedisType = "cluster"
+)
+
+// Redis - конфигурация Redis.
+type Redis struct {
+	Type RedisType `yaml:"type" validate:"required,oneof=single cluster"`
+	// single
+	Host string `yaml:"host" validate:"omitempty,hostname"`
+	Port int    `yaml:"port" validate:"omitempty,min=1024,max=65535"`
+	// cluster
+	Addrs []string `yaml:"addrs" validate:"omitempty,dive,hostname_port"`
+
+	InsertTimeout int `yaml:"insert_timeout" validate:"required,min=1"`
+	ReadTimeout   int `yaml:"read_timeout" validate:"required,min=1"`
+}
+
 // Config - конфигурация.
 type Config struct {
 	LogLevel   string `yaml:"log_level" validate:"required,oneof=debug info warn error"`
@@ -29,6 +52,7 @@ type Config struct {
 	Storage struct {
 		BufferSize int      `yaml:"buffer_size" validate:"required,min=1"`
 		Postgres   Postgres `yaml:"postgres"`
+		Redis      Redis    `yaml:"redis" validate:"required"`
 	} `yaml:"storage"`
 
 	Operations operation.OperationConfig `validate:"-"` // валидируется в LoadOperationConfig
@@ -74,10 +98,54 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("config: error register validation: %w", err)
 	}
 
-	return validate.Struct(cfg)
+	if err := validate.Struct(cfg); err != nil {
+		return fmt.Errorf("config: error validate: %w", err)
+	}
+
+	if err := cfg.validateRedisConfig(); err != nil {
+		return fmt.Errorf("config: error validate redis config: %w", err)
+	}
+
+	return nil
 }
 
 // ValidateRabbitMQAddress implements validator.Func.
 func ValidateRabbitMQAddress(fl validator.FieldLevel) bool {
 	return strings.HasPrefix(fl.Field().String(), "amqp://")
+}
+
+func (cfg *Config) validateRedisConfig() error {
+	switch cfg.Storage.Redis.Type {
+	case RedisTypeSingle:
+		return validateRedisSingleConfig(&cfg.Storage.Redis)
+	case RedisTypeCluster:
+		return validateRedisClusterConfig(&cfg.Storage.Redis)
+	}
+
+	// нет default, т.к. валидируется в validate.Struct
+	return nil
+}
+
+func validateRedisSingleConfig(cfg *Redis) error {
+	if cfg.Host == "" || cfg.Port == 0 {
+		return fmt.Errorf("config: host and port are required for single redis")
+	}
+
+	if len(cfg.Addrs) > 0 {
+		return fmt.Errorf("config: addrs are not allowed for single redis")
+	}
+
+	return nil
+}
+
+func validateRedisClusterConfig(cfg *Redis) error {
+	if len(cfg.Addrs) == 0 {
+		return fmt.Errorf("config: addrs are required for cluster redis")
+	}
+
+	if cfg.Host != "" || cfg.Port != 0 {
+		return fmt.Errorf("config: host and port are not allowed for cluster redis")
+	}
+
+	return nil
 }

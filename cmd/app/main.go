@@ -5,6 +5,7 @@ import (
 	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
 	operation_srv "db-worker/internal/service/operation"
+	"db-worker/internal/service/redis"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/service/worker/rabbit"
 	"db-worker/internal/storage"
@@ -94,6 +95,9 @@ func main() {
 
 		defer butler.stop(notifyCtx, operation)
 	}
+
+	redis := initRedisStorage(notifyCtx, cfg.Storage.Redis)
+	defer butler.stop(notifyCtx, redis)
 
 	logrus.Info("all services started")
 
@@ -251,6 +255,14 @@ func initUow(storages []storage.Driver, operationCfg *operation.Operation) *uow.
 		uow.WithStorages(storages),
 		uow.WithCfg(operationCfg),
 	))
+}
+
+func initRedisStorage(ctx context.Context, cfg config.Redis) *redis.Service {
+	redis := start(redis.New(redis.WithCfg(&cfg)))
+
+	startService(redis.Connect(ctx), "redis connect")
+
+	return redis
 }
 
 func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service) *operation_srv.Service {
