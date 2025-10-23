@@ -1,6 +1,7 @@
 package operation
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 
@@ -48,6 +49,8 @@ type Operation struct {
 	FieldsMap       map[string]Field      `yaml:"-" validate:"-"`
 	WhereFieldsMap  map[string]WhereField `yaml:"-" validate:"-"`
 	UpdateFieldsMap map[string]Field      `yaml:"-" validate:"-"` // поля, которые будут обновляться (при update операции)
+
+	Hash []byte `yaml:"-" validate:"-"` // поле для вычисления хеша операции (для версионирования)
 }
 
 // ConnectionType - тип соединения.
@@ -229,6 +232,14 @@ func LoadOperation(path string) (OperationConfig, error) {
 		return OperationConfig{}, fmt.Errorf("error validating operation config: %w", err)
 	}
 
+	for i, op := range operationConfig.Operations {
+		if err := op.calculateHash(); err != nil {
+			return OperationConfig{}, fmt.Errorf("operation %q: error calculating hash: %w", op.Name, err)
+		}
+
+		operationConfig.Operations[i] = op
+	}
+
 	return operationConfig, nil
 }
 
@@ -300,4 +311,43 @@ func aggregateValidation(opName string, field Field) (Field, error) {
 	}
 
 	return field, nil
+}
+
+// calculateHash вычисляет хэщ операции (для версионирования).
+func (oc *Operation) calculateHash() error {
+	// operation - внутрення структура для вычисления хеша.
+	type operation struct {
+		Name          string       `yaml:"name" validate:"required"`
+		Timeout       int          `yaml:"timeout" validate:"required,min=1"` // время ожидания операции в миллисекундах
+		OperationType Type         `yaml:"type" validate:"required,oneof=create update delete delete_all"`
+		Storages      []StorageCfg `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
+		Fields        []Field      `yaml:"fields" validate:"required,dive"`
+		Request       Request      `yaml:"request" validate:"required"`
+		Where         []Where      `yaml:"where" validate:"omitempty"` // условие, по которому будет выполнена операция. Только для операций update и delete
+	}
+
+	copy := operation{
+		Name:          oc.Name,
+		Timeout:       oc.Timeout,
+		OperationType: oc.Type,
+		Storages:      oc.Storages,
+		Fields:        oc.Fields,
+		Request:       oc.Request,
+		Where:         oc.Where,
+	}
+
+	data, err := yaml.Marshal(copy)
+	if err != nil {
+		return fmt.Errorf("error marshaling copy of operation to yaml: %w", err)
+	}
+
+	sum := sha256.Sum256(data)
+
+	oc.Hash = sum[:]
+
+	logrus.WithFields(logrus.Fields{
+		"name": oc.Name,
+	}).Info("successfully calculated hash of operation")
+
+	return nil
 }
