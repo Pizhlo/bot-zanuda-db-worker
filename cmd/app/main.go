@@ -4,13 +4,16 @@ import (
 	"context"
 	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
+	migration_srv "db-worker/internal/service/migration"
 	operation_srv "db-worker/internal/service/operation"
 	"db-worker/internal/service/redis"
 	"db-worker/internal/service/uow"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/service/worker/rabbit"
 	"db-worker/internal/storage"
+	"db-worker/internal/storage/postgres/migration"
 	postgres "db-worker/internal/storage/postgres/repo"
+
 	"flag"
 	"fmt"
 	"os"
@@ -95,6 +98,24 @@ func main() {
 
 		defer butler.stop(notifyCtx, operation)
 	}
+
+	migrationRepo := initMigrationRepo(notifyCtx, cfg.Storage.Postgres)
+	defer butler.stop(notifyCtx, migrationRepo)
+
+	go butler.start(func() error {
+		return migrationRepo.Run(notifyCtx)
+	})
+
+	migrationService := initMigrationService(migrationRepo)
+	defer butler.stop(notifyCtx, migrationService)
+
+	go butler.start(func() error {
+		if err := migrationService.Run(notifyCtx); err != nil {
+			logrus.WithError(err).Fatalf("error loading migrations")
+		}
+
+		return err
+	})
 
 	redis := initRedisStorage(notifyCtx, cfg.Storage.Redis)
 	defer butler.stop(notifyCtx, redis)
@@ -211,6 +232,13 @@ func initPostgresStorage(ctx context.Context, cfg operation.StorageCfg) storage.
 	))
 }
 
+func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo {
+	return start(migration.New(ctx,
+		migration.WithAddr(formatPostgresAddr(cfg)),
+		migration.WithInsertTimeout(cfg.InsertTimeout),
+	))
+}
+
 func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver) (map[string]*operation_srv.Service, error) {
 	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
@@ -233,6 +261,10 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 	}
 
 	return operations, nil
+}
+
+func initMigrationService(loader *migration.Repo) *migration_srv.Service {
+	return start(migration_srv.New(migration_srv.WithMigrationLoader(loader)))
 }
 
 func groupStorages(storagesCfg []operation.StorageCfg, storagesMap map[string]storage.Driver) ([]storage.Driver, error) {
