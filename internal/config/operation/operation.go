@@ -347,6 +347,7 @@ func (oc *Operation) calculateHash() error {
 
 	logrus.WithFields(logrus.Fields{
 		"name": oc.Name,
+		"hash": oc.Hash,
 	}).Info("successfully calculated hash of operation")
 
 	return nil
