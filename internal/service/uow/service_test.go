@@ -5,10 +5,12 @@ import (
 	"db-worker/internal/config/operation"
 	builder_pkg "db-worker/internal/service/builder"
 	"db-worker/internal/storage"
+	"db-worker/internal/storage/mocks"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,76 +34,32 @@ type mockStorage struct {
 	beginTxError  error
 }
 
-func (m *mockStorage) clear() {
+func (m *mockStorage) Table() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.execCalled = false
-	m.rolledBack = false
-	m.commitCalled = false
-	m.finishTxCalled = false
-	m.beginTxCalled = false
-
-	m.execError = nil
-	m.commitError = nil
-	m.finishTxError = nil
-	m.beginTxError = nil
-}
-
-func (m *mockStorage) Name() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.name
+	return "users.users"
 }
 
 func (m *mockStorage) DBName() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return "test-db-name"
-}
-
-func (m *mockStorage) Host() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return "test-host"
-}
-
-func (m *mockStorage) Port() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return 5432
-}
-
-func (m *mockStorage) User() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return "test-user"
-}
-
-func (m *mockStorage) Password() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return "test-password"
+	return "test-db"
 }
 
 func (m *mockStorage) Queue() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return "" // not implemented for this driver
+	return ""
 }
 
 func (m *mockStorage) RoutingKey() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return "" // not implemented for this driver
+	return ""
 }
 
 func (m *mockStorage) InsertTimeout() int {
@@ -118,50 +76,43 @@ func (m *mockStorage) ReadTimeout() int {
 	return 1000
 }
 
-func (m *mockStorage) Table() string {
+func (m *mockStorage) Port() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return "test-table"
+	return 5432
+}
+
+func (m *mockStorage) User() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "user"
+}
+
+func (m *mockStorage) Password() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "password"
+}
+
+func (m *mockStorage) Host() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "localhost"
+}
+
+func (m *mockStorage) Name() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.name
 }
 
 func (m *mockStorage) Run(_ context.Context) error {
 	return nil
-}
-
-func (m *mockStorage) getExecCalled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.execCalled
-}
-
-func (m *mockStorage) getRolledBackCalled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.rolledBack
-}
-
-func (m *mockStorage) getBeginTxCalled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.beginTxCalled
-}
-
-func (m *mockStorage) getFinishTxCalled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.finishTxCalled
-}
-
-func (m *mockStorage) getCommitedCalled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.commitCalled
 }
 
 func (m *mockStorage) Exec(_ context.Context, _ *storage.Request, _ string) error {
@@ -280,69 +231,127 @@ func (m *mockStorage) FinishTx(ctx context.Context, _ string) error {
 func TestNew(t *testing.T) {
 	t.Parallel()
 
-	driver := &mockStorage{name: "test-storage"}
-
 	tests := []struct {
-		name    string
-		opts    []option
-		wantErr require.ErrorAssertionFunc
-		want    *Service
+		name      string
+		setupOpts func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option
+		wantErr   require.ErrorAssertionFunc
+		want      func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service)
 	}{
 		{
 			name: "positive case",
-			opts: []option{
-				WithCfg(&operation.Operation{
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage"},
-					},
-				}),
-				WithStorages([]storage.Driver{driver}),
-			},
-			want: &Service{
-				cfg: &operation.Operation{
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage"},
-					},
-				},
-				storagesMap: map[string]storage.Driver{
-					"test-storage": driver,
-				},
-				transactions: make(map[string]*transaction),
-				driversMap: map[string]drivers{
-					"test-storage": {
-						driver: driver,
-						cfg: operation.StorageCfg{
-							Name: "test-storage",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option {
+				t.Helper()
+
+				mock, ok := driver.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
 						},
-					},
-				},
+					}),
+					WithStorages([]storage.Driver{mock}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
+				t.Helper()
+
+				// Проверяем только нужные поля, а не всю структуру
+				assert.NotNil(t, got)
+				assert.NotNil(t, got.cfg)
+				assert.Equal(t, "test-storage", got.cfg.Storages[0].Name)
+				assert.Equal(t, 1, got.instanceID)
+				assert.Equal(t, systemDB, got.storage)
+				assert.NotNil(t, got.userStoragesMap)
+				assert.NotNil(t, got.userDriversMap)
+				assert.Contains(t, got.userStoragesMap, "test-storage")
+				assert.Contains(t, got.userDriversMap, "test-storage")
 			},
 			wantErr: require.NoError,
 		},
 		{
 			name: "negative case: cfg is nil",
-			opts: []option{
-				WithStorages([]storage.Driver{driver}),
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option {
+				t.Helper()
+
+				return []option{
+					WithStorages([]storage.Driver{}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
+				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: storages are required",
-			opts: []option{
-				WithCfg(&operation.Operation{}),
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option {
+				t.Helper()
+
+				return []option{
+					WithCfg(&operation.Operation{}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
+				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: storage not found",
-			opts: []option{
-				WithCfg(&operation.Operation{
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage"},
-						{Name: "test-storage-2"},
-					},
-				}),
-				WithStorages([]storage.Driver{&mockStorage{name: "test-storage"}}),
+			setupOpts: func(t *testing.T, userStorage storage.Driver, systemDB *mocks.MockDriver) []option {
+				t.Helper()
+
+				systemDB.EXPECT().Name().Return("system-db").AnyTimes()
+
+				mock, ok := userStorage.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+							{Name: "test-storage-2"},
+						},
+					}),
+					WithStorages([]storage.Driver{userStorage}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
+				t.Helper()
 			},
 			wantErr: require.Error,
 		},
@@ -352,119 +361,71 @@ func TestNew(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := New(tt.opts...)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			systemDB := mocks.NewMockDriver(ctrl)
+
+			driver := mocks.NewMockDriver(ctrl)
+			opts := tt.setupOpts(t, driver, systemDB)
+
+			got, err := New(opts...)
 			tt.wantErr(t, err)
 
-			if got != nil {
-				assert.True(t, assert.EqualValues(t, tt.want, got))
-			}
+			tt.want(t, driver, systemDB, got)
 		})
 	}
 }
 
-//nolint:funlen // много тест-кейсов
-func TestMapStorages(t *testing.T) {
+func TestStoragesMap(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name       string
-		svc        *Service
-		wantErr    require.ErrorAssertionFunc
-		driversMap map[string]drivers
-	}{
-		{
-			name: "positive case",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage"},
-					},
-				},
-				storagesMap: map[string]storage.Driver{
-					"test-storage": &mockStorage{name: "test-storage"},
-				},
-				transactions: make(map[string]*transaction),
-				driversMap: map[string]drivers{
-					"test-storage": {
-						driver: &mockStorage{name: "test-storage"},
-						cfg: operation.StorageCfg{
-							Name: "test-storage",
-						},
-					},
-				},
-			},
-			wantErr: require.NoError,
-			driversMap: map[string]drivers{
-				"test-storage": {
-					driver: &mockStorage{name: "test-storage"},
-					cfg: operation.StorageCfg{
-						Name: "test-storage",
-					},
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := &Service{
+		userDriversMap: map[string]DriversMap{
+			"test-storage": {
+				driver: &mockStorage{name: "test-storage"},
+				cfg: operation.StorageCfg{
+					Name: "test-storage",
 				},
 			},
 		},
-		{
-			name: "negative case: storage not found",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage"},
-						{Name: "test-storage-2"},
-					},
-				},
-				storagesMap: map[string]storage.Driver{
-					"test-storage": &mockStorage{name: "test-storage"},
-				},
-				transactions: make(map[string]*transaction),
-			},
-			wantErr: require.Error,
-		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := tt.svc.mapStorages()
-			tt.wantErr(t, got)
-
-			if tt.driversMap != nil {
-				assert.Equal(t, tt.driversMap, tt.svc.driversMap)
-			}
-		})
-	}
+	got := svc.StoragesMap()
+	assert.Equal(t, svc.userDriversMap, got)
 }
 
 //nolint:funlen // много тест-кейсов
 func TestBuildRequests(t *testing.T) {
 	t.Parallel()
 
-	driver1 := &mockStorage{name: "test-storage", storageType: operation.StorageTypePostgres}
-	driver2 := &mockStorage{name: "test-storage-2", storageType: operation.StorageTypePostgres}
-
 	tests := []struct {
-		name    string
-		svc     *Service
-		msg     map[string]interface{}
-		wantErr require.ErrorAssertionFunc
-		want    map[storage.Driver]*storage.Request
+		name            string
+		createSvc       func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) *Service
+		msg             map[string]interface{}
+		setupMocks      func(t *testing.T, mockDriver1 *mocks.MockDriver, mockDriver2 *mocks.MockDriver)
+		setupDriversMap func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[string]DriversMap
+		operation       *operation.Operation
+		wantErr         require.ErrorAssertionFunc
+		setupWant       func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[storage.Driver]*storage.Request
 	}{
 		{
 			name: "positive case: one driver",
 			msg: map[string]interface{}{
 				"user_id": "1",
 			},
-			svc: &Service{
-				cfg: &operation.Operation{
-					Type: operation.OperationTypeCreate,
-					Storages: []operation.StorageCfg{
-						{
-							Name:  "test-storage",
-							Table: "users.users",
-						},
-					},
-				},
-				driversMap: map[string]drivers{
+			setupMocks: func(t *testing.T, mockDriver1 *mocks.MockDriver, mockDriver2 *mocks.MockDriver) {
+				t.Helper()
+
+				mockDriver1.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
+			},
+			setupDriversMap: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[string]DriversMap {
+				t.Helper()
+
+				return map[string]DriversMap{
 					"test-storage": {
 						driver: driver1,
 						cfg: operation.StorageCfg{
@@ -472,15 +433,52 @@ func TestBuildRequests(t *testing.T) {
 							Table: "users.users",
 						},
 					},
+				}
+			},
+			operation: &operation.Operation{
+				Type: operation.OperationTypeCreate,
+				Storages: []operation.StorageCfg{
+					{
+						Name:  "test-storage",
+						Table: "users.users",
+					},
 				},
 			},
+			createSvc: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Type: operation.OperationTypeCreate,
+						Storages: []operation.StorageCfg{
+							{
+								Name:  "test-storage",
+								Table: "users.users",
+							},
+						},
+					},
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: driver1,
+							cfg: operation.StorageCfg{
+								Name:  "test-storage",
+								Table: "users.users",
+							},
+						},
+					},
+				}
+			},
 			wantErr: require.NoError,
-			want: map[storage.Driver]*storage.Request{
-				driver1: {
-					Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-					Args: []any{"1"},
-					Raw:  map[string]any{"user_id": "1"},
-				},
+			setupWant: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[storage.Driver]*storage.Request {
+				t.Helper()
+
+				return map[storage.Driver]*storage.Request{
+					driver1: {
+						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+						Args: []any{"1"},
+						Raw:  map[string]any{"user_id": "1"},
+					},
+				}
 			},
 		},
 		{
@@ -488,21 +486,16 @@ func TestBuildRequests(t *testing.T) {
 			msg: map[string]interface{}{
 				"user_id": "1",
 			},
-			svc: &Service{
-				cfg: &operation.Operation{
-					Type: operation.OperationTypeCreate,
-					Storages: []operation.StorageCfg{
-						{
-							Name:  "test-storage",
-							Table: "users.users",
-						},
-						{
-							Name:  "test-storage-2",
-							Table: "users.users",
-						},
-					},
-				},
-				driversMap: map[string]drivers{
+			setupMocks: func(t *testing.T, mockDriver1 *mocks.MockDriver, mockDriver2 *mocks.MockDriver) {
+				t.Helper()
+
+				mockDriver1.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
+				mockDriver2.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
+			},
+			setupDriversMap: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[string]DriversMap {
+				t.Helper()
+
+				return map[string]DriversMap{
 					"test-storage": {
 						driver: driver1,
 						cfg: operation.StorageCfg{
@@ -517,61 +510,170 @@ func TestBuildRequests(t *testing.T) {
 							Table: "users.users",
 						},
 					},
+				}
+			},
+			operation: &operation.Operation{
+				Type: operation.OperationTypeCreate,
+				Storages: []operation.StorageCfg{
+					{Name: "test-storage",
+						Type: operation.StorageTypePostgres,
+					},
+					{Name: "test-storage-2",
+						Type: operation.StorageTypePostgres,
+					},
 				},
 			},
+			createSvc: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Type: operation.OperationTypeCreate,
+						Storages: []operation.StorageCfg{
+							{
+								Name:  "test-storage",
+								Table: "users.users",
+							},
+							{
+								Name:  "test-storage-2",
+								Table: "users.users",
+							},
+						},
+					},
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: driver1,
+							cfg: operation.StorageCfg{
+								Name:  "test-storage",
+								Table: "users.users",
+							},
+						},
+						"test-storage-2": {
+							driver: driver2,
+							cfg: operation.StorageCfg{
+								Name:  "test-storage-2",
+								Table: "users.users",
+							},
+						},
+					},
+				}
+			},
 			wantErr: require.NoError,
-			want: map[storage.Driver]*storage.Request{
-				driver1: {
-					Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-					Args: []any{"1"},
-					Raw:  map[string]any{"user_id": "1"},
-				},
-				driver2: {
-					Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-					Args: []any{"1"},
-					Raw:  map[string]any{"user_id": "1"},
-				},
+			setupWant: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[storage.Driver]*storage.Request {
+				t.Helper()
+
+				return map[storage.Driver]*storage.Request{
+					driver1: {
+						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+						Args: []any{"1"},
+						Raw:  map[string]any{"user_id": "1"},
+					},
+					driver2: {
+						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+						Args: []any{"1"},
+						Raw:  map[string]any{"user_id": "1"},
+					},
+				}
 			},
 		},
 		{
 			name: "negative case: unknown storage type",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Type: operation.OperationTypeCreate,
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage", Type: "unknown"},
-					},
+			setupMocks: func(t *testing.T, mockDriver1 *mocks.MockDriver, mockDriver2 *mocks.MockDriver) {
+				t.Helper()
+
+				mockDriver1.EXPECT().Type().Return(operation.StorageType("unknown")).Times(2)
+			},
+			msg: map[string]interface{}{
+				"user_id": "1",
+			},
+			operation: &operation.Operation{
+				Type: operation.OperationTypeCreate,
+				Storages: []operation.StorageCfg{
+					{Name: "test-storage", Type: operation.StorageTypePostgres},
+					{Name: "test-storage-2", Type: operation.StorageTypePostgres},
 				},
-				driversMap: map[string]drivers{
+			},
+			setupDriversMap: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[string]DriversMap {
+				t.Helper()
+
+				return map[string]DriversMap{
 					"test-storage": {
-						driver: &mockStorage{
-							name:        "test-storage",
-							storageType: "unknown",
+						driver: driver1,
+						cfg: operation.StorageCfg{
+							Name:  "test-storage",
+							Table: "users.users",
 						},
 					},
-				},
+				}
+			},
+			createSvc: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Type: operation.OperationTypeCreate,
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage", Type: "unknown"},
+						},
+					},
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: driver1,
+						},
+					},
+				}
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: unknown operation type",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Type: "unknown",
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage",
-							Type: operation.StorageTypePostgres,
-						},
-					},
-				},
-				driversMap: map[string]drivers{
+			setupMocks: func(t *testing.T, mockDriver1 *mocks.MockDriver, mockDriver2 *mocks.MockDriver) {
+				t.Helper()
+
+				mockDriver1.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
+			},
+			setupDriversMap: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) map[string]DriversMap {
+				t.Helper()
+
+				return map[string]DriversMap{
 					"test-storage": {
-						driver: &mockStorage{
-							name:        "test-storage",
-							storageType: operation.StorageTypePostgres,
+						driver: driver1,
+						cfg: operation.StorageCfg{
+							Name:  "test-storage",
+							Table: "users.users",
 						},
 					},
+				}
+			},
+			operation: &operation.Operation{
+				Type: "unknown",
+				Storages: []operation.StorageCfg{
+					{Name: "test-storage",
+						Type: operation.StorageTypePostgres,
+					},
 				},
+			},
+			createSvc: func(t *testing.T, driver1 storage.Driver, driver2 storage.Driver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Type: "unknown",
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage",
+								Type: operation.StorageTypePostgres,
+							},
+						},
+					},
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: &mockStorage{
+								name:        "test-storage",
+								storageType: operation.StorageTypePostgres,
+							},
+						},
+					},
+				}
 			},
 			wantErr: require.Error,
 		},
@@ -581,11 +683,20 @@ func TestBuildRequests(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := tt.svc.BuildRequests(tt.msg)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			driver1 := mocks.NewMockDriver(ctrl)
+			driver2 := mocks.NewMockDriver(ctrl)
+			svc := tt.createSvc(t, driver1, driver2)
+
+			tt.setupMocks(t, driver1, driver2)
+
+			got, err := svc.BuildRequests(tt.msg, tt.setupDriversMap(t, driver1, driver2), *tt.operation)
 			tt.wantErr(t, err)
 
-			if tt.want != nil {
-				assert.True(t, assert.ObjectsAreEqual(tt.want, got))
+			if tt.setupWant != nil {
+				assert.True(t, assert.ObjectsAreEqual(tt.setupWant(t, driver1, driver2), got))
 			}
 		})
 	}
@@ -677,5 +788,131 @@ func TestSetOperationType(t *testing.T) {
 				assert.Equal(t, tt.want, got)
 			}
 		})
+	}
+}
+
+//nolint:funlen // много тест-кейсов
+func TestMapStoragesConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		wantErr       require.ErrorAssertionFunc
+		driversCfgMap map[string]DriversMap
+		storagesCfg   []operation.StorageCfg
+		storagesMap   map[string]storage.Driver
+
+		wantDriversMap map[string]DriversMap
+	}{
+		{
+			name: "positive case",
+			storagesMap: map[string]storage.Driver{
+				"test-storage": &mockStorage{name: "test-storage"},
+			},
+			driversCfgMap: map[string]DriversMap{
+				"test-storage": {
+					driver: &mockStorage{name: "test-storage"},
+					cfg: operation.StorageCfg{
+						Name: "test-storage",
+					},
+				},
+			},
+			storagesCfg: []operation.StorageCfg{
+				{Name: "test-storage"},
+			},
+			wantErr: require.NoError,
+			wantDriversMap: map[string]DriversMap{
+				"test-storage": {
+					driver: &mockStorage{name: "test-storage"},
+					cfg: operation.StorageCfg{
+						Name: "test-storage",
+					},
+				},
+			},
+		},
+		{
+			name: "negative case: storage not found",
+			storagesCfg: []operation.StorageCfg{
+				{Name: "test-storage"},
+				{Name: "test-storage-2"},
+			},
+			storagesMap: map[string]storage.Driver{
+				"test-storage": &mockStorage{name: "test-storage"},
+			},
+			driversCfgMap: make(map[string]DriversMap),
+			wantErr:       require.Error,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := mapStoragesConfigs(tt.driversCfgMap, tt.storagesCfg, tt.storagesMap)
+			tt.wantErr(t, got)
+
+			if tt.wantDriversMap != nil {
+				assert.Equal(t, tt.wantDriversMap, tt.driversCfgMap)
+			}
+		})
+	}
+}
+
+func newTestService(t *testing.T, systemDriver storage.Driver, userDriver storage.Driver) *Service {
+	t.Helper()
+
+	return &Service{
+		instanceID: 1,
+		cfg: &operation.Operation{
+			Name: "test-operation",
+			Hash: []byte{0x1, 0x2, 0x3},
+		},
+		userDriversMap: map[string]DriversMap{
+			"test-storage": {
+				driver: userDriver,
+				cfg: operation.StorageCfg{
+					Name: "test-storage",
+				},
+			},
+		},
+		userStoragesMap: map[string]storage.Driver{
+			"test-storage": userDriver,
+		},
+		storage: systemDriver,
+		transactionDriversMap: map[string]DriversMap{
+			StorageNameForTransactionsTable: {
+				driver: systemDriver,
+				cfg: operation.StorageCfg{
+					Name:  StorageNameForTransactionsTable,
+					Table: "transactions.transactions",
+				},
+			},
+		},
+		requestsDriversMap: map[string]DriversMap{
+			StorageNameForRequestsTable: {
+				driver: systemDriver,
+				cfg: operation.StorageCfg{
+					Name:  StorageNameForRequestsTable,
+					Table: "transactions.requests",
+				},
+			},
+		},
+		systemStoragesMap: map[string]storage.Driver{
+			StorageNameForTransactionsTable: systemDriver,
+			StorageNameForRequestsTable:     systemDriver,
+		},
+
+		systemStorageConfigs: []operation.StorageCfg{
+			{
+				Name:  StorageNameForTransactionsTable,
+				Type:  operation.StorageTypePostgres,
+				Table: "transactions.transactions",
+			},
+			{
+				Name:  StorageNameForRequestsTable,
+				Type:  operation.StorageTypePostgres,
+				Table: "transactions.requests",
+			},
+		},
 	}
 }

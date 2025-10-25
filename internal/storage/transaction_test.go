@@ -65,7 +65,7 @@ func TestNewTransaction(t *testing.T) {
 				assert.Equal(t, want.OperationHash(), got.OperationHash())
 
 				assert.Len(t, got.begun, 0)
-				assert.Len(t, got.ID(), 10)
+				assert.Len(t, got.ID(), 20)
 			},
 			wantError: require.NoError,
 		},

@@ -2,8 +2,10 @@ package operation
 
 import (
 	"db-worker/internal/config/operation"
+	"db-worker/internal/service/operation/mocks"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -13,24 +15,28 @@ func TestValidateMessage(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		svc     *Service
-		msg     map[string]interface{}
-		wantErr require.ErrorAssertionFunc
+		name      string
+		createSvc func(t *testing.T, mockUow *mocks.MockunitOfWork) *Service
+		msg       map[string]interface{}
+		wantErr   require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			svc: &Service{
-				uow: &mockUnitOfWork{},
-				cfg: &operation.Operation{
-					Name: "test",
-					Fields: []operation.Field{
-						{
-							Name: "field1",
-							Type: "string",
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork) *Service {
+				t.Helper()
+
+				return &Service{
+					uow: mockUow,
+					cfg: &operation.Operation{
+						Name: "test",
+						Fields: []operation.Field{
+							{
+								Name: "field1",
+								Type: "string",
+							},
 						},
 					},
-				},
+				}
 			},
 			msg: map[string]interface{}{
 				"field1": "test",
@@ -39,32 +45,41 @@ func TestValidateMessage(t *testing.T) {
 		},
 		{
 			name: "negative case: missing required field",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test",
-					Fields: []operation.Field{
-						{
-							Name: "field1",
-							Type: "string",
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork) *Service {
+				t.Helper()
+
+				return &Service{
+					uow: mockUow,
+					cfg: &operation.Operation{
+						Name: "test",
+						Fields: []operation.Field{
+							{
+								Name: "field1",
+								Type: "string",
+							},
 						},
 					},
-				},
+				}
 			},
 			msg:     map[string]interface{}{},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: wrong field type",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test",
-					Fields: []operation.Field{
-						{
-							Name: "field1",
-							Type: "string",
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test",
+						Fields: []operation.Field{
+							{
+								Name: "field1",
+								Type: "string",
+							},
 						},
 					},
-				},
+				}
 			},
 			msg: map[string]interface{}{
 				"field1": 123,
@@ -73,27 +88,32 @@ func TestValidateMessage(t *testing.T) {
 		},
 		{
 			name: "positive case: multiple fields with different types",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test",
-					Fields: []operation.Field{
-						{
-							Name:     "field1",
-							Type:     "string",
-							Required: true,
-						},
-						{
-							Name:     "field2",
-							Type:     "int64",
-							Required: true,
-						},
-						{
-							Name:     "field3",
-							Type:     "float64",
-							Required: false,
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork) *Service {
+				t.Helper()
+
+				return &Service{
+					uow: mockUow,
+					cfg: &operation.Operation{
+						Name: "test",
+						Fields: []operation.Field{
+							{
+								Name:     "field1",
+								Type:     "string",
+								Required: true,
+							},
+							{
+								Name:     "field2",
+								Type:     "int64",
+								Required: true,
+							},
+							{
+								Name:     "field3",
+								Type:     "float64",
+								Required: false,
+							},
 						},
 					},
-				},
+				}
 			},
 			msg: map[string]interface{}{
 				"field1": "test",
@@ -108,7 +128,14 @@ func TestValidateMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.svc.validateMessage(tt.msg)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockUow := mocks.NewMockunitOfWork(ctrl)
+
+			svc := tt.createSvc(t, mockUow)
+
+			err := svc.validateMessage(tt.msg)
 			tt.wantErr(t, err)
 		})
 	}

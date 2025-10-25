@@ -237,10 +237,6 @@ func (b *whereBuilder) initUpdateBuilder() error {
 		return errors.New("args is nil")
 	}
 
-	if b.whereFieldsMap == nil {
-		return errors.New("whereFieldsMap is nil")
-	}
-
 	ub := sqlbuilder.NewUpdateBuilder()
 	b.ub = ub
 	ub.SetFlavor(sqlbuilder.PostgreSQL)

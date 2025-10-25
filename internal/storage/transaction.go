@@ -93,7 +93,7 @@ func NewTransaction(requests map[Driver]*Request, instanceID int, operationHash 
 	// instanceID может быть 0
 
 	return &Transaction{
-		id:            random.String(10),
+		id:            random.String(20),
 		status:        TxStatusInProgress,
 		requests:      requests,
 		err:           ErrEmpty,
