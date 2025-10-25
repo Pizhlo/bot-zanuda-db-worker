@@ -76,7 +76,7 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]interface{}
 		"connection": s.cfg.Request.From,
 	}).Info("operation: message validated")
 
-	requests, err := s.uow.BuildRequests(msg)
+	requests, err := s.uow.BuildRequests(msg, s.uow.StoragesMap(), *s.cfg)
 	if err != nil {
 		return fmt.Errorf("error build requests: %w", err)
 	}

@@ -129,6 +129,7 @@ func (b *createPostgresBuilder) build() (*storage.Request, error) {
 	return &storage.Request{
 		Val:  sql,
 		Args: args,
+		Raw:  b.args,
 	}, nil
 }
 
@@ -179,6 +180,7 @@ func (b *updatePostgresBuilder) build() (*storage.Request, error) {
 	return &storage.Request{
 		Val:  sql,
 		Args: args,
+		Raw:  b.args,
 	}, nil
 }
 
@@ -233,10 +235,6 @@ func (b *whereBuilder) initUpdateBuilder() error {
 
 	if b.args == nil {
 		return errors.New("args is nil")
-	}
-
-	if b.whereFieldsMap == nil {
-		return errors.New("whereFieldsMap is nil")
 	}
 
 	ub := sqlbuilder.NewUpdateBuilder()

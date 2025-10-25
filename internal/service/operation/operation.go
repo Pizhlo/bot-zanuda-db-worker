@@ -3,6 +3,7 @@ package operation
 import (
 	"context"
 	"db-worker/internal/config/operation"
+	"db-worker/internal/service/uow"
 	"db-worker/internal/storage"
 	"errors"
 
@@ -23,8 +24,9 @@ type Service struct {
 //
 //go:generate mockgen -source=operation.go -destination=mocks/unit_of_work_mock.go -package=operation unitOfWork
 type unitOfWork interface {
-	BuildRequests(msg map[string]interface{}) (map[storage.Driver]*storage.Request, error)
+	BuildRequests(msg map[string]interface{}, driversMap map[string]uow.DriversMap, operation operation.Operation) (map[storage.Driver]*storage.Request, error)
 	ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) error
+	StoragesMap() map[string]uow.DriversMap
 }
 
 // option определяет опции для сервиса.

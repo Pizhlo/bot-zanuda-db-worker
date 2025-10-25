@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
 	"db-worker/internal/storage"
 	"errors"
@@ -18,9 +19,12 @@ import (
 
 // Repo сохраняет результаты выполнения транзакции в базу данных.
 type Repo struct {
-	addr string
-	db   *sql.DB
-	name string
+	addr  string
+	db    *sql.DB
+	name  string
+	table string
+
+	cfg *config.Postgres
 
 	insertTimeout int
 	readTimeout   int
@@ -62,6 +66,18 @@ func WithReadTimeout(readTimeout int) RepoOption {
 	}
 }
 
+func WithCfg(cfg *config.Postgres) RepoOption {
+	return func(r *Repo) {
+		r.cfg = cfg
+	}
+}
+
+func WithTable(table string) RepoOption {
+	return func(r *Repo) {
+		r.table = table
+	}
+}
+
 // New создает новый репозиторий.
 func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	r := &Repo{}
@@ -84,6 +100,10 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 
 	if r.addr == "" {
 		return nil, errors.New("addr is required")
+	}
+
+	if r.cfg == nil {
+		return nil, errors.New("config is required")
 	}
 
 	db, err := sql.Open("postgres", r.addr)
@@ -159,18 +179,18 @@ func (db *Repo) getTx(id string) (*sql.Tx, error) {
 
 // Commit коммитит транзакцию.
 func (db *Repo) Commit(ctx context.Context, id string) error {
-	db.transaction.mu.Lock()
-	defer db.transaction.mu.Unlock()
-
-	tx, ok := db.transaction.tx[id]
-	if !ok {
-		return fmt.Errorf("transaction not found")
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
 	}
 
-	err := tx.Commit()
+	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
+
+	db.transaction.mu.Lock()
+	defer db.transaction.mu.Unlock()
 
 	delete(db.transaction.tx, id)
 
@@ -179,13 +199,18 @@ func (db *Repo) Commit(ctx context.Context, id string) error {
 
 // Rollback откатывает транзакцию.
 func (db *Repo) Rollback(ctx context.Context, id string) error {
-	db.transaction.mu.Lock()
-	defer db.transaction.mu.Unlock()
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
 
-	err := db.transaction.tx[id].Rollback()
+	err = tx.Rollback()
 	if err != nil {
 		return fmt.Errorf("error rolling back transaction: %w", err)
 	}
+
+	db.transaction.mu.Lock()
+	defer db.transaction.mu.Unlock()
 
 	delete(db.transaction.tx, id)
 
@@ -242,4 +267,42 @@ func (db *Repo) Name() string {
 // Type возвращает тип хранилища (PostgreSQL).
 func (db *Repo) Type() operation.StorageType {
 	return operation.StorageTypePostgres
+}
+
+func (db *Repo) Table() string {
+	return db.table
+}
+
+func (db *Repo) Host() string {
+	return db.cfg.Host
+}
+
+func (db *Repo) User() string {
+	return db.cfg.User
+}
+
+func (db *Repo) Password() string {
+	return db.cfg.Password
+}
+
+func (db *Repo) DBName() string {
+	return db.cfg.DBName
+}
+
+func (db *Repo) Queue() string {
+	return "" // not implemented in this driver
+}
+
+func (db *Repo) RoutingKey() string {
+	return "" // not implemented in this driver
+}
+func (db *Repo) InsertTimeout() int {
+	return db.insertTimeout
+}
+func (db *Repo) ReadTimeout() int {
+	return db.readTimeout
+}
+
+func (db *Repo) Port() int {
+	return db.cfg.Port
 }

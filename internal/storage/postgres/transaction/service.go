@@ -3,6 +3,8 @@ package transaction
 import (
 	"context"
 	"database/sql"
+	"db-worker/internal/config"
+	"db-worker/internal/config/operation"
 	"errors"
 	"fmt"
 	"sync"
@@ -19,6 +21,7 @@ type Repo struct {
 	addr       string
 	db         *sql.DB
 	instanceID int
+	cfg        *config.Postgres
 
 	insertTimeout int
 	readTimeout   int
@@ -60,6 +63,12 @@ func WithInstanceID(instanceID int) RepoOption {
 	}
 }
 
+func WithCfg(cfg *config.Postgres) RepoOption {
+	return func(r *Repo) {
+		r.cfg = cfg
+	}
+}
+
 // New создает новый репозиторий.
 func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	r := &Repo{}
@@ -95,11 +104,6 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 
 	db = sqldblogger.OpenDriver(r.addr, db.Driver(), logrusadapter.New(logger))
 
-	err = db.PingContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot connect to a db: %w", err)
-	} // to check connectivity and DSN correctness
-
 	r.transaction = struct {
 		mu sync.Mutex
 		tx map[string]*sql.Tx
@@ -110,15 +114,26 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	return r, nil
 }
 
-// Close закрывает репозиторий.
-func (db *Repo) Close() {
-	if err := db.db.Close(); err != nil {
-		logrus.Errorf("error on closing space repo: %v", err)
+func (db *Repo) Run(ctx context.Context) error {
+	if err := db.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("error pinging db: %w", err)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"addr": db.addr,
+		"name": "system-db",
+	}).Info("successfully connected postgres")
+
+	return nil
 }
 
-// BeginTx начинает транзакцию.
-func (db *Repo) BeginTx(ctx context.Context, id string) error {
+// Close закрывает репозиторий.
+func (db *Repo) Stop(_ context.Context) error {
+	return db.db.Close()
+}
+
+// Begin начинает транзакцию.
+func (db *Repo) Begin(ctx context.Context, id string) error {
 	if _, err := db.getTx(id); err == nil {
 		return nil
 	}
@@ -136,21 +151,21 @@ func (db *Repo) BeginTx(ctx context.Context, id string) error {
 	return nil
 }
 
-// func (db *Repo) getOrCreateTx(ctx context.Context, id string) (*sql.Tx, error) {
-// 	tx, err := db.getTx(id)
-// 	if err == nil {
-// 		return tx, nil
-// 	}
+func (db *Repo) getOrCreateTx(ctx context.Context, id string) (*sql.Tx, error) {
+	tx, err := db.getTx(id)
+	if err == nil {
+		return tx, nil
+	}
 
-// 	tx, err = db.db.BeginTx(ctx, nil)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error on begin transaction: %w", err)
-// 	}
+	tx, err = db.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error on begin transaction: %w", err)
+	}
 
-// 	db.transaction.tx[id] = tx
+	db.transaction.tx[id] = tx
 
-// 	return tx, nil
-// }
+	return tx, nil
+}
 
 func (db *Repo) getTx(id string) (*sql.Tx, error) {
 	db.transaction.mu.Lock()
@@ -166,13 +181,18 @@ func (db *Repo) getTx(id string) (*sql.Tx, error) {
 
 // Commit коммитит транзакцию.
 func (db *Repo) Commit(ctx context.Context, id string) error {
-	db.transaction.mu.Lock()
-	defer db.transaction.mu.Unlock()
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
 
-	err := db.transaction.tx[id].Commit()
+	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
+
+	db.transaction.mu.Lock()
+	defer db.transaction.mu.Unlock()
 
 	delete(db.transaction.tx, id)
 
@@ -181,15 +201,82 @@ func (db *Repo) Commit(ctx context.Context, id string) error {
 
 // Rollback откатывает транзакцию.
 func (db *Repo) Rollback(ctx context.Context, id string) error {
-	db.transaction.mu.Lock()
-	defer db.transaction.mu.Unlock()
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
 
-	err := db.transaction.tx[id].Rollback()
+	err = tx.Rollback()
 	if err != nil {
 		return fmt.Errorf("error rolling back transaction: %w", err)
 	}
 
+	db.transaction.mu.Lock()
+	defer db.transaction.mu.Unlock()
+
 	delete(db.transaction.tx, id)
 
 	return nil
+}
+
+func (db *Repo) FinishTx(ctx context.Context, id string) error {
+	db.transaction.mu.Lock()
+	defer db.transaction.mu.Unlock()
+
+	tx, ok := db.transaction.tx[id]
+	if !ok {
+		return nil // ничего не делаем — уже очищено (либо commit, либо rollback)
+	}
+
+	// Игнорируем ошибку Rollback — цель: гарантированно освободить ресурсы
+	_ = tx.Rollback()
+	delete(db.transaction.tx, id)
+
+	return nil
+}
+
+func (s *Repo) Name() string {
+	return "system-db"
+}
+
+func (s *Repo) Type() operation.StorageType {
+	return operation.StorageTypePostgres
+}
+
+func (db *Repo) Table() string {
+	return "transactions.transactions"
+}
+
+func (db *Repo) Host() string {
+	return db.cfg.Host
+}
+
+func (db *Repo) User() string {
+	return db.cfg.User
+}
+
+func (db *Repo) Password() string {
+	return db.cfg.Password
+}
+
+func (db *Repo) DBName() string {
+	return db.cfg.DBName
+}
+
+func (db *Repo) Queue() string {
+	return "" // not implemented in this driver
+}
+
+func (db *Repo) RoutingKey() string {
+	return "" // not implemented in this driver
+}
+func (db *Repo) InsertTimeout() int {
+	return db.insertTimeout
+}
+func (db *Repo) ReadTimeout() int {
+	return db.readTimeout
+}
+
+func (db *Repo) Port() int {
+	return db.cfg.Port
 }

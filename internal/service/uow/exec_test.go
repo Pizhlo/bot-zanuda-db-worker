@@ -99,7 +99,7 @@ func TestCommit(t *testing.T) {
 					Name:    "test-operation",
 					Timeout: 10, // 10ms timeout для операции
 				},
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-driver": {
 						driver: &mockStorage{name: "test-driver", timeout: 50}, // 50ms задержка, больше чем timeout операции
 						cfg: operation.StorageCfg{
@@ -157,7 +157,7 @@ func TestRollback(t *testing.T) {
 	driver1 := &mockStorage{name: "test-driver-1"}
 	driver2 := &mockStorage{name: "test-driver-2"}
 
-	driversMap := map[string]drivers{
+	driversMap := map[string]DriversMap{
 		"test-driver-1": {
 			driver: driver1,
 			cfg: operation.StorageCfg{
@@ -260,7 +260,7 @@ func TestRollback(t *testing.T) {
 						requests: map[storage.Driver]*storage.Request{},
 					},
 				},
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-driver": {
 						driver: &mockStorage{name: "test-driver", timeout: 50}, // 50ms задержка, больше чем timeout операции
 						cfg: operation.StorageCfg{
@@ -333,7 +333,7 @@ func TestExecRequests(t *testing.T) {
 						Name: "test-operation",
 					},
 					transactions: make(map[string]*transaction),
-					driversMap: map[string]drivers{
+					driversMap: map[string]DriversMap{
 						"test-storage": {
 							driver: driver,
 							cfg: operation.StorageCfg{
@@ -365,7 +365,7 @@ func TestExecRequests(t *testing.T) {
 						Name: "test-operation",
 					},
 					transactions: make(map[string]*transaction),
-					driversMap: map[string]drivers{
+					driversMap: map[string]DriversMap{
 						"test-storage-exec-error": {
 							driver: driverExecError,
 							cfg: operation.StorageCfg{
@@ -400,7 +400,7 @@ func TestExecRequests(t *testing.T) {
 						Name: "test-operation",
 					},
 					transactions: make(map[string]*transaction),
-					driversMap: map[string]drivers{
+					driversMap: map[string]DriversMap{
 						"test-storage-commit-error": {
 							driver: driverCommitError,
 							cfg: operation.StorageCfg{
@@ -475,7 +475,7 @@ func TestExecWithTx(t *testing.T) {
 							failedDriver: "",
 						},
 					},
-					driversMap: map[string]drivers{
+					driversMap: map[string]DriversMap{
 						"test-storage": {
 							driver: driver,
 							cfg: operation.StorageCfg{
@@ -544,7 +544,7 @@ func TestExecWithTx(t *testing.T) {
 							failedDriver: "",
 						},
 					},
-					driversMap: map[string]drivers{
+					driversMap: map[string]DriversMap{
 						"test-storage": {
 							driver: driverExecError,
 							cfg: operation.StorageCfg{

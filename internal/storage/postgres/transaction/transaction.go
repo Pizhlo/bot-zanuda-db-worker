@@ -1,101 +1,88 @@
 package transaction
 
-// import (
-// 	"context"
-// 	"db-worker/internal/model"
-// 	interfaces "db-worker/internal/service/message/interface"
-// 	"encoding/json"
-// 	"fmt"
-// 	"time"
+import (
+	"context"
+	"db-worker/internal/service/builder"
+	"db-worker/internal/storage"
+	"errors"
+	"fmt"
+)
 
-// 	"github.com/sirupsen/logrus"
-// )
+func (s *Repo) SaveTx(ctx context.Context, tx storage.TransactionEditor) error {
+	dbTx, err := s.getOrCreateTx(ctx, tx.ID())
+	if err != nil {
+		return fmt.Errorf("error creating transaction: %w", err)
+	}
 
-// func (s *Repo) CreateTx(ctx context.Context, id string, notes []interfaces.Message) error {
-// 	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.insertTimeout)*time.Millisecond)
-// 	defer cancel()
+	// Создаем транзакцию
+	createTxQuery := `
+		INSERT INTO transactions.transactions (id, status, error, instance_id, failed_driver, operation_hash)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
 
-// 	tx, err := s.getOrCreateTx(ctx, id)
-// 	if err != nil {
-// 		return fmt.Errorf("error creating transaction: %w", err)
-// 	}
+	_, err = dbTx.ExecContext(ctx, createTxQuery, tx.ID, tx.Status, tx.Error(), tx.InstanceID(), tx.FailedDriver(), tx.OperationHash())
+	if err != nil {
+		return fmt.Errorf("error saving transaction: %w", err)
+	}
 
-// 	// Создаем транзакцию
-// 	createTxQuery := `
-// 		INSERT INTO transactions.transactions (id, status, created_at, instance_id)
-// 		VALUES ($1, 'in progress', extract(epoch from current_timestamp)::BIGINT, $2)
-// 	`
+	// поля, которые будут переданы билдеру, для сохранения запросов в базе
+	fields := map[string]any{
+		"tx_id": tx.ID,
+	}
 
-// 	_, err = tx.ExecContext(ctx, createTxQuery, id, s.instanceID)
-// 	if err != nil {
-// 		return fmt.Errorf("error saving transaction: %w", err)
-// 	}
+	for driver, req := range tx.Requests() {
+		fields["driver_name"] = driver.Name()
+		fields["driver_type"] = driver.Type()
+		fields["data"] = req.Raw
+	}
 
-// 	// Сохраняем запросы
-// 	saveRequestsQuery := `
-// 		INSERT INTO transactions.requests (id, entity, data, operation, tx_id)
-// 		VALUES ($1, $2, $3, $4, $5)
-// 	`
+	b := builder.ForPostgres().WithTable("transactions.requests").WithCreateOperation().WithValues(fields)
 
-// 	stmt, err := tx.PrepareContext(ctx, saveRequestsQuery)
-// 	if err != nil {
-// 		return fmt.Errorf("error preparing statement: %w", err)
-// 	}
-// 	defer stmt.Close()
+	req, err := b.Build()
+	if err != nil {
+		return fmt.Errorf("error building request for saving transaction's requests: %w", err)
+	}
 
-// 	for _, note := range notes {
-// 		model := note.Model()
+	_, err = dbTx.ExecContext(ctx, req.Val.(string), req.Args)
+	if err != nil {
+		return fmt.Errorf("error saving transaction's requests: %w", err)
+	}
 
-// 		data, err := json.Marshal(model)
-// 		if err != nil {
-// 			return fmt.Errorf("error marshaling model: %w", err)
-// 		}
+	// не коммитим, т.к. это будет сделано извне
+	return nil
+}
 
-// 		_, err = stmt.ExecContext(ctx, note.GetRequestID(), "notes", data, note.GetOperation(), id)
-// 		if err != nil {
-// 			return fmt.Errorf("error saving request: %w", err)
-// 		}
-// 	}
+// UpdateTx обновляет транзакцию в кэше и хранилище.
+func (s *Repo) UpdateTx(ctx context.Context, tx storage.TransactionEditor) error {
+	return errors.New("not implemented")
+}
 
-// 	logrus.Debugf("Transaction Saver: transaction created and requests saved. transaction id: %s", id)
+// DeleteTx удаляет транзакцию из кэша и хранилища.
+func (s *Repo) DeleteTx(ctx context.Context, tx storage.TransactionEditor) error {
+	return errors.New("not implemented")
+}
 
-// 	return s.Commit(ctx, id)
-// }
+// Exec выполняет запрос.
+func (db *Repo) Exec(ctx context.Context, req *storage.Request, id string) error {
+	tx, err := db.getTx(id)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
 
-// func (s *Repo) SaveResult(ctx context.Context, id string, result model.Result) error {
-// 	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.insertTimeout)*time.Millisecond)
-// 	defer cancel()
+	sql, ok := req.Val.(string)
+	if !ok {
+		return fmt.Errorf("request value is not a string")
+	}
 
-// 	tx, err := s.getOrCreateTx(ctx, id)
-// 	if err != nil {
-// 		return fmt.Errorf("error creating transaction: %w", err)
-// 	}
+	args, ok := req.Args.([]any)
+	if !ok {
+		return fmt.Errorf("request arguments are not a slice of any")
+	}
 
-// 	var query string
-// 	args := []any{}
+	_, err = tx.ExecContext(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("error executing query: %w", err)
+	}
 
-// 	if result.Status == "failed" {
-// 		query = `
-// 		UPDATE transactions.transactions
-// 		SET status = $2::tx_status, error = $3
-// 		WHERE id = $1
-// 	`
-// 		args = append(args, id, result.Status, result.Error)
-// 	} else {
-// 		query = `
-// 		UPDATE transactions.transactions
-// 		SET status = $2::tx_status
-// 		WHERE id = $1
-// 	`
-// 		args = append(args, id, result.Status)
-// 	}
-
-// 	_, err = tx.ExecContext(ctx, query, args...)
-// 	if err != nil {
-// 		return fmt.Errorf("error updating transaction result: %w", err)
-// 	}
-
-// 	logrus.Debugf("transaction result saved. transaction id: %s", id)
-
-// 	return s.Commit(ctx, id)
-// }
+	return nil
+}

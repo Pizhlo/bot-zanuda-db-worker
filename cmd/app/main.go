@@ -13,6 +13,7 @@ import (
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/postgres/migration"
 	postgres "db-worker/internal/storage/postgres/repo"
+	"db-worker/internal/storage/postgres/transaction"
 
 	"flag"
 	"fmt"
@@ -86,7 +87,13 @@ func main() {
 		defer butler.stop(notifyCtx, storage)
 	}
 
-	operations, err := initOperationServices(cfg, connections, storagesMap)
+	txRepo := initTxRepo(notifyCtx, *cfg)
+	go butler.start(func() error {
+		return txRepo.Run(notifyCtx)
+	})
+	defer butler.stop(notifyCtx, txRepo)
+
+	operations, err := initOperationServices(cfg, connections, storagesMap, txRepo)
 	if err != nil {
 		logrus.WithError(err).Fatalf("error initializing operation services")
 	}
@@ -203,7 +210,7 @@ func initStorage(ctx context.Context, storage operation.StorageCfg) (storage.Dri
 }
 
 func initPostgresStorage(ctx context.Context, cfg operation.StorageCfg) storage.Driver {
-	addr := formatPostgresAddr(config.Postgres{
+	postgresCfg := config.Postgres{
 		Host:          cfg.Host,
 		Port:          cfg.Port,
 		User:          cfg.User,
@@ -211,7 +218,9 @@ func initPostgresStorage(ctx context.Context, cfg operation.StorageCfg) storage.
 		DBName:        cfg.DBName,
 		InsertTimeout: cfg.InsertTimeout,
 		ReadTimeout:   cfg.ReadTimeout,
-	})
+	}
+
+	addr := formatPostgresAddr(postgresCfg)
 
 	logrus.WithFields(logrus.Fields{
 		"host":           cfg.Host,
@@ -229,6 +238,8 @@ func initPostgresStorage(ctx context.Context, cfg operation.StorageCfg) storage.
 		postgres.WithInsertTimeout(cfg.InsertTimeout),
 		postgres.WithReadTimeout(cfg.ReadTimeout),
 		postgres.WithName(cfg.Name),
+		postgres.WithCfg(&postgresCfg),
+		postgres.WithTable(cfg.Table),
 	))
 }
 
@@ -239,7 +250,17 @@ func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo
 	))
 }
 
-func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver) (map[string]*operation_srv.Service, error) {
+func initTxRepo(ctx context.Context, cfg config.Config) *transaction.Repo {
+	return start(transaction.New(ctx,
+		transaction.WithAddr(formatPostgresAddr(cfg.Storage.Postgres)),
+		transaction.WithInsertTimeout(cfg.Storage.Postgres.InsertTimeout),
+		transaction.WithInstanceID(cfg.InstanceID),
+		transaction.WithReadTimeout(cfg.Storage.Postgres.ReadTimeout),
+		transaction.WithCfg(&cfg.Storage.Postgres),
+	))
+}
+
+func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo *transaction.Repo) (map[string]*operation_srv.Service, error) {
 	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
 	for _, operationCfg := range cfg.Operations.Operations {
@@ -253,7 +274,7 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 			return nil, fmt.Errorf("error grouping storages: %w", err)
 		}
 
-		uow := initUow(storages, &operationCfg)
+		uow := initUow(storages, &operationCfg, txRepo)
 
 		op := initOperation(operationCfg, conn, uow)
 
@@ -282,10 +303,11 @@ func groupStorages(storagesCfg []operation.StorageCfg, storagesMap map[string]st
 	return storages, nil
 }
 
-func initUow(storages []storage.Driver, operationCfg *operation.Operation) *uow.Service {
+func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo *transaction.Repo) *uow.Service {
 	return start(uow.New(
 		uow.WithStorages(storages),
 		uow.WithCfg(operationCfg),
+		uow.WithStorage(repo),
 	))
 }
 

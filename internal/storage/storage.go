@@ -7,16 +7,38 @@ import (
 
 // Driver определяет интерфейс для работы с хранилищем.
 type Driver interface {
-	Run(ctx context.Context) error
-	Exec(ctx context.Context, req *Request, id string) error
-	Stop(ctx context.Context) error
-	Type() operation.StorageType
-	Name() string
+	configurator
+	transactionEditor
+	runner
+}
+
+type transactionEditor interface {
 	Commit(ctx context.Context, id string) error
 	Rollback(ctx context.Context, id string) error
 	Begin(ctx context.Context, id string) error
 	// FinishTx завершает транзакцию. Используется, если не удалось начать транзакцию в одном из драйверов.
 	FinishTx(ctx context.Context, id string) error
+}
+
+type runner interface {
+	Run(ctx context.Context) error
+	Exec(ctx context.Context, req *Request, id string) error
+	Stop(ctx context.Context) error
+}
+
+type configurator interface {
+	Type() operation.StorageType
+	Name() string
+	Table() string
+	Host() string
+	Port() int
+	User() string
+	Password() string
+	DBName() string
+	Queue() string
+	RoutingKey() string
+	InsertTimeout() int
+	ReadTimeout() int
 }
 
 // Request - запрос к хранилищу.

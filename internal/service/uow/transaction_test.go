@@ -23,8 +23,8 @@ func TestBeginTx(t *testing.T) {
 		name       string
 		svc        *Service
 		requests   map[storage.Driver]*storage.Request
-		checkMocks func(t *testing.T, requests map[storage.Driver]*storage.Request, tx *transaction)
-		checkTx    func(t *testing.T, svc *Service, requests map[storage.Driver]*storage.Request, actualTx *transaction)
+		checkMocks func(t *testing.T, requests map[storage.Driver]*storage.Request, tx *storage.Transaction)
+		checkTx    func(t *testing.T, svc *Service, requests map[storage.Driver]*storage.Request, actualTx *storage.Transaction)
 		wantErr    require.ErrorAssertionFunc
 	}{
 		{
@@ -33,7 +33,7 @@ func TestBeginTx(t *testing.T) {
 				cfg: &operation.Operation{
 					Name: "test-operation",
 				},
-				transactions: make(map[string]*transaction),
+				transactions: make(map[string]*storage.Transaction),
 			},
 			requests: map[storage.Driver]*storage.Request{
 				driver: {
@@ -41,30 +41,30 @@ func TestBeginTx(t *testing.T) {
 					Args: []any{"1"},
 				},
 			},
-			checkMocks: func(t *testing.T, requests map[storage.Driver]*storage.Request, tx *transaction) {
+			checkMocks: func(t *testing.T, requests map[storage.Driver]*storage.Request, tx *storage.Transaction) {
 				t.Helper()
 
 				assert.True(t, driver.getBeginTxCalled())
 				assert.False(t, driver.getFinishTxCalled())
 			},
-			checkTx: func(t *testing.T, svc *Service, requests map[storage.Driver]*storage.Request, actualTx *transaction) {
+			checkTx: func(t *testing.T, svc *Service, requests map[storage.Driver]*storage.Request, actualTx *storage.Transaction) {
 				t.Helper()
 
 				// то, что вернула функция
 				assert.NotNil(t, actualTx)
-				assert.Equal(t, txStatusInProgress, actualTx.status)
-				assert.Equal(t, requests, actualTx.requests)
+				assert.Equal(t, storage.TxStatusInProgress, actualTx.Status)
+				assert.Equal(t, requests, actualTx.Requests)
 
-				begunMap := map[string]struct{}{
+				BegunMap := map[string]struct{}{
 					driver.Name(): {},
 				}
 
-				assert.Equal(t, begunMap, actualTx.begun)
+				assert.Equal(t, BegunMap, actualTx.Begun)
 
 				// транзакция будет одна, но мы не знаем айди
 				for _, tx := range svc.transactions {
-					assert.Equal(t, txStatusInProgress, tx.status)
-					assert.Equal(t, requests, tx.requests)
+					assert.Equal(t, storage.TxStatusInProgress, tx.Status)
+					assert.Equal(t, requests, tx.Requests)
 				}
 
 				assert.Len(t, svc.transactions, 1)
@@ -77,7 +77,7 @@ func TestBeginTx(t *testing.T) {
 				cfg: &operation.Operation{
 					Name: "test-operation",
 				},
-				transactions: make(map[string]*transaction),
+				transactions: make(map[string]*storage.Transaction),
 			},
 			requests: func() map[storage.Driver]*storage.Request {
 				driver := &mockStorage{name: "test-storage"}
@@ -94,7 +94,7 @@ func TestBeginTx(t *testing.T) {
 					},
 				}
 			}(),
-			checkMocks: func(t *testing.T, requests map[storage.Driver]*storage.Request, tx *transaction) {
+			checkMocks: func(t *testing.T, requests map[storage.Driver]*storage.Request, tx *storage.Transaction) {
 				t.Helper()
 
 				// Проверяем, что драйверы были вызваны
@@ -102,11 +102,11 @@ func TestBeginTx(t *testing.T) {
 				// мы не можем проверить их состояние
 
 				if tx != nil {
-					_, ok := tx.begun[driver.Name()]
-					assert.True(t, ok, "driver %s should be in begun map for transaction %s", driver.Name(), tx.id)
+					_, ok := tx.Begun[driver.Name()]
+					assert.True(t, ok, "driver %s should be in Begun map for transaction %s", driver.Name(), tx.ID)
 
 					for driver := range requests {
-						if _, ok := tx.begun[driver.Name()]; ok {
+						if _, ok := tx.Begun[driver.Name()]; ok {
 							assert.True(t, driver.(*mockStorage).getBeginTxCalled(), "method beginTx should be called for driver %s", driver.Name())
 						}
 					}
@@ -114,7 +114,7 @@ func TestBeginTx(t *testing.T) {
 					t.Log("transaction is nil")
 				}
 			},
-			checkTx: func(t *testing.T, svc *Service, requests map[storage.Driver]*storage.Request, actualTx *transaction) {
+			checkTx: func(t *testing.T, svc *Service, requests map[storage.Driver]*storage.Request, actualTx *storage.Transaction) {
 				t.Helper()
 
 				assert.Nil(t, actualTx)
@@ -156,7 +156,7 @@ func TestFinishTx(t *testing.T) {
 	tests := []struct {
 		name       string
 		svc        *Service
-		tx         *transaction
+		tx         *storage.Transaction
 		checkMap   func(t *testing.T, svc *Service)
 		checkMocks func(t *testing.T, driver *mockStorage)
 		wantErr    require.ErrorAssertionFunc
@@ -164,10 +164,10 @@ func TestFinishTx(t *testing.T) {
 		{
 			name: "positive case",
 			svc: func() *Service {
-				tx := &transaction{
-					id:     txID,
-					status: txStatusSuccess,
-					requests: map[storage.Driver]*storage.Request{
+				tx := &storage.Transaction{
+					ID:     txID,
+					Status: storage.TxStatusSuccess,
+					Requests: map[storage.Driver]*storage.Request{
 						driver: {
 							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 							Args: []any{"1"},
@@ -179,15 +179,15 @@ func TestFinishTx(t *testing.T) {
 					cfg: &operation.Operation{
 						Name: "test-operation",
 					},
-					transactions: map[string]*transaction{
+					transactions: map[string]*storage.Transaction{
 						txID: tx,
 					},
 				}
 			}(),
-			tx: &transaction{
-				id:     txID,
-				status: txStatusSuccess,
-				requests: map[storage.Driver]*storage.Request{
+			tx: &storage.Transaction{
+				ID:     txID,
+				Status: storage.TxStatusSuccess,
+				Requests: map[storage.Driver]*storage.Request{
 					driver: {
 						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 						Args: []any{"1"},
@@ -213,11 +213,11 @@ func TestFinishTx(t *testing.T) {
 				cfg: &operation.Operation{
 					Name: "test-operation",
 				},
-				transactions: map[string]*transaction{
+				transactions: map[string]*storage.Transaction{
 					txID: {
-						id:     txID,
-						status: txStatusInProgress,
-						requests: map[storage.Driver]*storage.Request{
+						ID:     txID,
+						Status: storage.TxStatusInProgress,
+						Requests: map[storage.Driver]*storage.Request{
 							&mockStorage{name: "test-storage"}: {
 								Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 								Args: []any{"1"},
@@ -226,10 +226,10 @@ func TestFinishTx(t *testing.T) {
 					},
 				},
 			},
-			tx: &transaction{
-				id:     txID,
-				status: txStatusInProgress,
-				requests: map[storage.Driver]*storage.Request{
+			tx: &storage.Transaction{
+				ID:     txID,
+				Status: storage.TxStatusInProgress,
+				Requests: map[storage.Driver]*storage.Request{
 					&mockStorage{name: "test-storage"}: {
 						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 						Args: []any{"1"},
@@ -257,180 +257,6 @@ func TestFinishTx(t *testing.T) {
 			if tt.checkMocks != nil {
 				tt.checkMocks(t, driver)
 			}
-		})
-	}
-}
-
-func TestSetFailedDriver(t *testing.T) {
-	t.Parallel()
-
-	tx := &transaction{
-		id:     random.String(10),
-		status: txStatusInProgress,
-		requests: map[storage.Driver]*storage.Request{
-			&mockStorage{name: "test-storage"}: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-		},
-	}
-
-	driver := "test-driver"
-
-	tx.setFailedDriver(driver)
-
-	assert.Equal(t, driver, tx.failedDriver)
-}
-
-func TestSetStatus(t *testing.T) {
-	t.Parallel()
-
-	tx := &transaction{
-		id:     random.String(10),
-		status: txStatusInProgress,
-		requests: map[storage.Driver]*storage.Request{
-			&mockStorage{name: "test-storage"}: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-		},
-	}
-
-	status := txStatusSuccess
-
-	tx.setStatus(status)
-
-	assert.Equal(t, status, tx.status)
-}
-
-func TestSetFailedStatus(t *testing.T) {
-	t.Parallel()
-
-	tx := &transaction{
-		id:     random.String(10),
-		status: txStatusInProgress,
-		requests: map[storage.Driver]*storage.Request{
-			&mockStorage{name: "test-storage"}: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-		},
-	}
-
-	driver := "test-driver"
-	err := errors.New("test error")
-
-	tx.setFailedStatus(driver, err)
-
-	assert.Equal(t, driver, tx.failedDriver)
-	assert.Equal(t, txStatusFailed, tx.status)
-	assert.Equal(t, err, tx.err)
-}
-
-func TestSetSuccessStatus(t *testing.T) {
-	t.Parallel()
-
-	tx := &transaction{
-		id:     random.String(10),
-		status: txStatusInProgress,
-		requests: map[storage.Driver]*storage.Request{
-			&mockStorage{name: "test-storage"}: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-		},
-	}
-
-	tx.setSuccessStatus()
-
-	assert.Equal(t, txStatusSuccess, tx.status)
-}
-
-func TestIsInProgress(t *testing.T) {
-	t.Parallel()
-
-	tx := &transaction{
-		status: txStatusInProgress,
-	}
-
-	assert.True(t, tx.isInProgress())
-}
-
-func TestIsFailed(t *testing.T) {
-	t.Parallel()
-
-	tx := &transaction{
-		status: txStatusFailed,
-	}
-
-	assert.True(t, tx.isFailed())
-}
-
-//nolint:funlen // длинный тест
-func TestIsEqualStatus(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		tx     *transaction
-		status txStatus
-		want   assert.BoolAssertionFunc
-	}{
-		{
-			name: "equal to success",
-			tx: &transaction{
-				status: txStatusSuccess,
-			},
-			status: txStatusSuccess,
-			want:   assert.True,
-		},
-		{
-			name: "equal to failed",
-			tx: &transaction{
-				status: txStatusFailed,
-			},
-			status: txStatusFailed,
-			want:   assert.True,
-		},
-		{
-			name: "equal to in progress",
-			tx: &transaction{
-				status: txStatusInProgress,
-			},
-			status: txStatusInProgress,
-			want:   assert.True,
-		},
-		{
-			name: "not equal to success",
-			tx: &transaction{
-				status: txStatusInProgress,
-			},
-			status: txStatusSuccess,
-			want:   assert.False,
-		},
-		{
-			name: "not equal to failed",
-			tx: &transaction{
-				status: txStatusInProgress,
-			},
-			status: txStatusFailed,
-			want:   assert.False,
-		},
-		{
-			name: "not equal to in progress",
-			tx: &transaction{
-				status: txStatusSuccess,
-			},
-			status: txStatusInProgress,
-			want:   assert.False,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tt.want(t, tt.tx.isEqualStatus(tt.status))
 		})
 	}
 }

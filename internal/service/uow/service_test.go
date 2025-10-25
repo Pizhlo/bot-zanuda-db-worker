@@ -238,7 +238,7 @@ func TestNew(t *testing.T) {
 					"test-storage": driver,
 				},
 				transactions: make(map[string]*transaction),
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-storage": {
 						driver: driver,
 						cfg: operation.StorageCfg{
@@ -300,7 +300,7 @@ func TestMapStorages(t *testing.T) {
 		name       string
 		svc        *Service
 		wantErr    require.ErrorAssertionFunc
-		driversMap map[string]drivers
+		driversMap map[string]DriversMap
 	}{
 		{
 			name: "positive case",
@@ -314,7 +314,7 @@ func TestMapStorages(t *testing.T) {
 					"test-storage": &mockStorage{name: "test-storage"},
 				},
 				transactions: make(map[string]*transaction),
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-storage": {
 						driver: &mockStorage{name: "test-storage"},
 						cfg: operation.StorageCfg{
@@ -324,7 +324,7 @@ func TestMapStorages(t *testing.T) {
 				},
 			},
 			wantErr: require.NoError,
-			driversMap: map[string]drivers{
+			driversMap: map[string]DriversMap{
 				"test-storage": {
 					driver: &mockStorage{name: "test-storage"},
 					cfg: operation.StorageCfg{
@@ -394,7 +394,7 @@ func TestBuildRequests(t *testing.T) {
 						},
 					},
 				},
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-storage": {
 						driver: driver1,
 						cfg: operation.StorageCfg{
@@ -431,7 +431,7 @@ func TestBuildRequests(t *testing.T) {
 						},
 					},
 				},
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-storage": {
 						driver: driver1,
 						cfg: operation.StorageCfg{
@@ -469,7 +469,7 @@ func TestBuildRequests(t *testing.T) {
 						{Name: "test-storage", Type: "unknown"},
 					},
 				},
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-storage": {
 						driver: &mockStorage{
 							name:        "test-storage",
@@ -491,7 +491,7 @@ func TestBuildRequests(t *testing.T) {
 						},
 					},
 				},
-				driversMap: map[string]drivers{
+				driversMap: map[string]DriversMap{
 					"test-storage": {
 						driver: &mockStorage{
 							name:        "test-storage",
