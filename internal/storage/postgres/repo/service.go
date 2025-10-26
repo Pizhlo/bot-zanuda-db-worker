@@ -243,3 +243,53 @@ func (db *Repo) Name() string {
 func (db *Repo) Type() operation.StorageType {
 	return operation.StorageTypePostgres
 }
+
+// Table возвращает имя таблицы.
+func (db *Repo) Table() string {
+	return ""
+}
+
+// Host возвращает адрес хоста.
+func (db *Repo) Host() string {
+	return db.addr
+}
+
+// Port возвращает порт.
+func (db *Repo) Port() int {
+	return 0
+}
+
+// User возвращает имя пользователя.
+func (db *Repo) User() string {
+	return ""
+}
+
+// Password возвращает пароль.
+func (db *Repo) Password() string {
+	return ""
+}
+
+// DBName возвращает имя базы данных.
+func (db *Repo) DBName() string {
+	return ""
+}
+
+// Queue возвращает имя очереди.
+func (db *Repo) Queue() string {
+	return ""
+}
+
+// RoutingKey возвращает ключ маршрутизации.
+func (db *Repo) RoutingKey() string {
+	return ""
+}
+
+// InsertTimeout возвращает время ожидания вставки.
+func (db *Repo) InsertTimeout() int {
+	return db.insertTimeout
+}
+
+// ReadTimeout возвращает время ожидания чтения.
+func (db *Repo) ReadTimeout() int {
+	return db.readTimeout
+}

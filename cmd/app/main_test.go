@@ -148,6 +148,46 @@ type mockStorage struct {
 	name string
 }
 
+func (m *mockStorage) DBName() string {
+	return "test-db-name"
+}
+
+func (m *mockStorage) Host() string {
+	return "test-host"
+}
+
+func (m *mockStorage) Port() int {
+	return 5432
+}
+
+func (m *mockStorage) User() string {
+	return ""
+}
+
+func (m *mockStorage) Password() string {
+	return "test-password"
+}
+
+func (m *mockStorage) Queue() string {
+	return ""
+}
+
+func (m *mockStorage) RoutingKey() string {
+	return ""
+}
+
+func (m *mockStorage) InsertTimeout() int {
+	return 1000
+}
+
+func (m *mockStorage) ReadTimeout() int {
+	return 1000
+}
+
+func (m *mockStorage) Table() string {
+	return "test-table"
+}
+
 func (m *mockStorage) Name() string {
 	return m.name
 }

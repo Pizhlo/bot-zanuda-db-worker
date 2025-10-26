@@ -55,6 +55,76 @@ func (m *mockStorage) Name() string {
 	return m.name
 }
 
+func (m *mockStorage) DBName() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "test-db-name"
+}
+
+func (m *mockStorage) Host() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "test-host"
+}
+
+func (m *mockStorage) Port() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return 5432
+}
+
+func (m *mockStorage) User() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "test-user"
+}
+
+func (m *mockStorage) Password() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "test-password"
+}
+
+func (m *mockStorage) Queue() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "" // not implemented for this driver
+}
+
+func (m *mockStorage) RoutingKey() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "" // not implemented for this driver
+}
+
+func (m *mockStorage) InsertTimeout() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return 1000
+}
+
+func (m *mockStorage) ReadTimeout() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return 1000
+}
+
+func (m *mockStorage) Table() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return "test-table"
+}
+
 func (m *mockStorage) Run(_ context.Context) error {
 	return nil
 }
