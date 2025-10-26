@@ -129,6 +129,7 @@ func (b *createPostgresBuilder) build() (*storage.Request, error) {
 	return &storage.Request{
 		Val:  sql,
 		Args: args,
+		Raw:  b.args,
 	}, nil
 }
 
@@ -179,6 +180,7 @@ func (b *updatePostgresBuilder) build() (*storage.Request, error) {
 	return &storage.Request{
 		Val:  sql,
 		Args: args,
+		Raw:  b.args,
 	}, nil
 }
 
@@ -250,8 +252,8 @@ func (b *whereBuilder) initUpdateBuilder() error {
 func (b *whereBuilder) applyAssignments() error {
 	assignments := make([]string, 0, len(b.args))
 	for name := range b.updateFieldsMap {
-		value := b.args[name]
-		if value == nil {
+		value, ok := b.args[name]
+		if !ok {
 			return fmt.Errorf("missing value for update field %s", name)
 		}
 

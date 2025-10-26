@@ -6,4 +6,5 @@ package model
 type Request struct {
 	Val  any
 	Args any
+	Raw  map[string]any
 }

@@ -266,6 +266,7 @@ func TestBuild(t *testing.T) {
 			want: &storage.Request{
 				Val:  "INSERT INTO test (test) VALUES ($1)",
 				Args: []any{"test"},
+				Raw:  map[string]any{"test": "test"},
 			},
 			wantErr: require.NoError,
 		},
@@ -358,6 +359,7 @@ func TestCreatePostgresBuilder_Build(t *testing.T) {
 			want: &storage.Request{
 				Val:  "INSERT INTO test (test) VALUES ($1)",
 				Args: []any{"test"},
+				Raw:  map[string]any{"test": "test"},
 			},
 			wantErr: require.NoError,
 		},
@@ -457,6 +459,7 @@ func TestUpdatePostgresBuilder_Build(t *testing.T) {
 			want: &storage.Request{
 				Val:  "UPDATE users.users SET age = $1 WHERE name = $2",
 				Args: []any{20, "ivan"},
+				Raw:  map[string]any{"age": 20},
 			},
 		},
 		{
@@ -653,26 +656,6 @@ func TestWhereBuilder_InitUpdateBuilder(t *testing.T) {
 						Value:    "test",
 					},
 				},
-				where: []operation.Where{
-					{
-						Fields: []operation.WhereField{
-							{
-								Field:    operation.Field{Name: "test"},
-								Operator: operation.OperatorEqual,
-								Value:    "test",
-							},
-						},
-					},
-				},
-			},
-			want:    nil,
-			wantErr: require.Error,
-		},
-		{
-			name: "whereFieldsMap is nil",
-			builder: &whereBuilder{
-				table: "test",
-				args:  map[string]any{"test": "test"},
 				where: []operation.Where{
 					{
 						Fields: []operation.WhereField{

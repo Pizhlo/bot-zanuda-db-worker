@@ -479,6 +479,7 @@ func TestBuildRequests(t *testing.T) {
 				driver1: {
 					Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 					Args: []any{"1"},
+					Raw:  map[string]any{"user_id": "1"},
 				},
 			},
 		},
@@ -523,10 +524,12 @@ func TestBuildRequests(t *testing.T) {
 				driver1: {
 					Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 					Args: []any{"1"},
+					Raw:  map[string]any{"user_id": "1"},
 				},
 				driver2: {
 					Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 					Args: []any{"1"},
+					Raw:  map[string]any{"user_id": "1"},
 				},
 			},
 		},
