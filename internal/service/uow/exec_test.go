@@ -3,388 +3,114 @@ package uow
 import (
 	"db-worker/internal/config/operation"
 	"db-worker/internal/storage"
-	"db-worker/pkg/random"
+	"db-worker/internal/storage/mocks"
+	"db-worker/internal/storage/testtransaction"
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:funlen,dupl // много тест-кейсов, одинаковые тест-кейсы для разных тестов
-func TestCommit(t *testing.T) {
-	t.Parallel()
-
-	txID := random.String(10)
-
-	// Создаем один экземпляр mockStorage для использования в тесте
-	mockStorageInstance := &mockStorage{name: "test-storage"}
-
-	tx := &transaction{
-		id:     txID,
-		status: txStatusInProgress,
-		requests: map[storage.Driver]*storage.Request{
-			mockStorageInstance: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-		},
-		failedDriver: "",
-	}
-
-	tests := []struct {
-		name       string
-		svc        *Service
-		tx         *transaction
-		wantTx     *transaction
-		wantErr    require.ErrorAssertionFunc
-		checkMocks func(t *testing.T, driver *mockStorage)
-	}{
-		{
-			name: "positive case",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test-operation",
-				},
-				transactions: map[string]*transaction{
-					txID: tx,
-				},
-			},
-			tx: tx,
-			wantTx: &transaction{
-				id:     txID,
-				status: txStatusSuccess,
-				requests: map[storage.Driver]*storage.Request{
-					mockStorageInstance: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
-			},
-			checkMocks: func(t *testing.T, driver *mockStorage) {
-				t.Helper()
-
-				assert.True(t, driver.getCommitedCalled())
-			},
-			wantErr: require.NoError,
-		},
-		{
-			name: "error case: transaction is not in progress",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test-operation",
-				},
-				transactions: map[string]*transaction{
-					txID: {
-						id:       txID,
-						status:   txStatusFailed,
-						requests: map[storage.Driver]*storage.Request{},
-					},
-				},
-			},
-			tx: &transaction{
-				id:       txID,
-				status:   txStatusFailed,
-				requests: map[storage.Driver]*storage.Request{},
-			},
-			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
-				require.Error(t, err)
-				require.ErrorContains(t, err, "transaction status not equal to: \"in progress\"")
-			}),
-		},
-		{
-			name: "error case: context deadline exceeded",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name:    "test-operation",
-					Timeout: 10, // 10ms timeout для операции
-				},
-				driversMap: map[string]drivers{
-					"test-driver": {
-						driver: &mockStorage{name: "test-driver", timeout: 50}, // 50ms задержка, больше чем timeout операции
-						cfg: operation.StorageCfg{
-							Name: "test-driver",
-						},
-					},
-				},
-			},
-			tx: &transaction{
-				id:     txID,
-				status: txStatusInProgress,
-				requests: map[storage.Driver]*storage.Request{
-					&mockStorage{name: "test-storage", timeout: 50}: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
-			},
-			checkMocks: func(t *testing.T, driver *mockStorage) {
-				t.Helper()
-
-				assert.True(t, driver.getCommitedCalled())
-			},
-			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
-				require.Error(t, err)
-				require.ErrorContains(t, err, "context deadline exceeded")
-			}),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tt.svc.Commit(t.Context(), tt.tx)
-			tt.wantErr(t, err)
-
-			if tt.wantTx != nil {
-				assert.EqualValues(t, tt.wantTx, tt.tx)
-			}
-
-			if tt.checkMocks != nil {
-				tt.checkMocks(t, mockStorageInstance)
-			}
-		})
-	}
-}
-
-//nolint:funlen,dupl // много тест-кейсов, одинаковые тест-кейсы для разных тестов
-func TestRollback(t *testing.T) {
-	t.Parallel()
-
-	txID := random.String(10)
-
-	driver1 := &mockStorage{name: "test-driver-1"}
-	driver2 := &mockStorage{name: "test-driver-2"}
-
-	driversMap := map[string]drivers{
-		"test-driver-1": {
-			driver: driver1,
-			cfg: operation.StorageCfg{
-				Name: "test-driver-1",
-			},
-		},
-		"test-driver-2": {
-			driver: driver2,
-			cfg: operation.StorageCfg{
-				Name: "test-driver-2",
-			},
-		},
-	}
-
-	tx := &transaction{
-		id:     txID,
-		status: txStatusFailed,
-		requests: map[storage.Driver]*storage.Request{
-			driver1: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-			driver2: {
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
-			},
-		},
-		failedDriver: "test-driver-1",
-	}
-
-	tests := []struct {
-		name       string
-		svc        *Service
-		id         string
-		tx         *transaction
-		wantTx     *transaction
-		checkMocks func(t *testing.T, svc *Service)
-		wantErr    require.ErrorAssertionFunc
-	}{
-		{
-			name: "positive case",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test-operation",
-				},
-				transactions: map[string]*transaction{
-					txID: tx,
-				},
-				driversMap: driversMap,
-			},
-			tx: tx,
-			checkMocks: func(t *testing.T, svc *Service) {
-				t.Helper()
-
-				assert.False(t, svc.driversMap["test-driver-1"].driver.(*mockStorage).getRolledBackCalled())
-				assert.True(t, svc.driversMap["test-driver-2"].driver.(*mockStorage).getRolledBackCalled())
-
-				tx, ok := svc.transactions[txID]
-				require.False(t, ok)
-
-				assert.Nil(t, tx)
-			},
-			wantErr: require.NoError,
-		},
-		{
-			name: "error case: transaction is not failed",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test-operation",
-				},
-				transactions: map[string]*transaction{
-					txID: {
-						id:       txID,
-						status:   txStatusInProgress,
-						requests: map[storage.Driver]*storage.Request{},
-					},
-				},
-			},
-			tx: &transaction{
-				id:       txID,
-				status:   txStatusInProgress,
-				requests: map[storage.Driver]*storage.Request{},
-			},
-			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
-				require.Error(t, err)
-				require.ErrorContains(t, err, "transaction status not equal to: \"failed\"")
-			}),
-		},
-		{
-			name: "error case: context deadline exceeded",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name:    "test-operation",
-					Timeout: 10, // 10ms timeout для операции
-				},
-				transactions: map[string]*transaction{
-					txID: {
-						id:       txID,
-						status:   txStatusFailed,
-						requests: map[storage.Driver]*storage.Request{},
-					},
-				},
-				driversMap: map[string]drivers{
-					"test-driver": {
-						driver: &mockStorage{name: "test-driver", timeout: 50}, // 50ms задержка, больше чем timeout операции
-						cfg: operation.StorageCfg{
-							Name: "test-driver",
-						},
-					},
-				},
-			},
-			tx: &transaction{
-				id:           txID,
-				status:       txStatusFailed,
-				failedDriver: "test-driver", // Устанавливаем failedDriver, чтобы этот драйвер был пропущен при rollback
-				requests: map[storage.Driver]*storage.Request{
-					&mockStorage{name: "test-driver", timeout: 50}: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
-			},
-			id: txID,
-			checkMocks: func(t *testing.T, svc *Service) {
-				t.Helper()
-
-				// Поскольку failedDriver = "test-driver", этот драйвер должен быть пропущен при rollback
-				assert.False(t, svc.driversMap["test-driver"].driver.(*mockStorage).getRolledBackCalled())
-
-				tx, ok := svc.transactions[txID]
-				require.False(t, ok)
-				assert.Nil(t, tx)
-			},
-			wantErr: require.NoError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tt.svc.Rollback(t.Context(), tt.tx)
-			tt.wantErr(t, err)
-
-			if tt.wantTx != nil {
-				assert.Equal(t, tt.wantTx, tt.tx)
-			}
-
-			if tt.checkMocks != nil {
-				tt.checkMocks(t, tt.svc)
-			}
-		})
-	}
-}
-
-//nolint:funlen,dupl // много тест-кейсов, одинаковые тест-кейсы для разных тестов
+//nolint:funlen // много тест-кейсов
 func TestExecRequests(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name     string
-		svc      *Service
-		requests map[storage.Driver]*storage.Request
+		setupSvc func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		requests func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request
 		wantErr  require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			svc: func() *Service {
-				driver := &mockStorage{name: "test-storage"}
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				// системное хранилище может дергаться многократно в ходе сохранений/обновлений
+				systemDriver.EXPECT().Name().Return(StorageNameForTransactionsTable).AnyTimes()
+				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+
+				// начать транзакцию в пользовательском хранилище
+				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return newTestService(t, systemDriver, userDriver)
+			},
+			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
+				t.Helper()
+
+				return map[storage.Driver]*storage.Request{
+					mock: {
+						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+						Args: []any{"1"},
+					},
+				}
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "error case: exec error",
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+
+				// начать транзакцию в пользовательском хранилище
+				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("test error")).AnyTimes()
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				// обновление транзакции в системном хранилище после ошибки
+				systemDriver.EXPECT().Name().Return(StorageNameForTransactionsTable).AnyTimes()
+				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test-operation",
+						Hash: []byte{0x1, 0x2, 0x3},
 					},
-					transactions: make(map[string]*transaction),
-					driversMap: map[string]drivers{
+					userDriversMap: map[string]DriversMap{
 						"test-storage": {
-							driver: driver,
+							driver: userDriver,
 							cfg: operation.StorageCfg{
 								Name: "test-storage",
 							},
 						},
 					},
+					storage: systemDriver,
 				}
-			}(),
-			requests: func() map[storage.Driver]*storage.Request {
-				driver := &mockStorage{name: "test-storage"}
+			},
+			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
+				t.Helper()
 
 				return map[storage.Driver]*storage.Request{
-					driver: {
+					mock: {
 						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 						Args: []any{"1"},
 					},
 				}
-			}(),
-			wantErr: require.NoError,
-		},
-		{
-			name: "error case: exec error",
-			svc: func() *Service {
-				driverExecError := &mockStorage{name: "test-storage-exec-error", execError: errors.New("test error")}
-
-				return &Service{
-					cfg: &operation.Operation{
-						Name: "test-operation",
-					},
-					transactions: make(map[string]*transaction),
-					driversMap: map[string]drivers{
-						"test-storage-exec-error": {
-							driver: driverExecError,
-							cfg: operation.StorageCfg{
-								Name: "test-storage-exec-error",
-							},
-						},
-					},
-				}
-			}(),
-			requests: func() map[storage.Driver]*storage.Request {
-				driverExecError := &mockStorage{name: "test-storage-exec-error", execError: errors.New("test error")}
-
-				return map[storage.Driver]*storage.Request{
-					driverExecError: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				}
-			}(),
+			},
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
 				require.ErrorContains(t, err, "error exec request: test error")
@@ -392,37 +118,109 @@ func TestExecRequests(t *testing.T) {
 		},
 		{
 			name: "error case: commit error",
-			svc: func() *Service {
-				driverCommitError := &mockStorage{name: "test-storage-commit-error", commitError: errors.New("test error")}
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+
+				// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				// начать транзакцию в пользовательском хранилище
+				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(errors.New("test error")).AnyTimes()
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test-operation",
+						Hash: []byte{0x1, 0x2, 0x3},
 					},
-					transactions: make(map[string]*transaction),
-					driversMap: map[string]drivers{
-						"test-storage-commit-error": {
-							driver: driverCommitError,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
 							cfg: operation.StorageCfg{
-								Name: "test-storage-commit-error",
+								Name: "test-storage",
 							},
 						},
 					},
+					storage: systemDriver,
 				}
-			}(),
-			requests: func() map[storage.Driver]*storage.Request {
-				driverCommitError := &mockStorage{name: "test-storage-commit-error", commitError: errors.New("test error")}
+			},
+			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
+				t.Helper()
 
 				return map[storage.Driver]*storage.Request{
-					driverCommitError: {
+					mock: {
 						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 						Args: []any{"1"},
 					},
 				}
-			}(),
+			},
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
-				require.ErrorContains(t, err, "test error")
+				require.ErrorContains(t, err, "error commit transaction")
+			}),
+		},
+		{
+			name: "error case: finish tx error",
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+
+				// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				// начать транзакцию в пользовательском хранилище
+				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(errors.New("finish tx error")).AnyTimes()
+
+				// ----
+
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+
+				// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				// начать транзакцию в пользовательском хранилище
+				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(errors.New("test error")).AnyTimes()
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				// системный драйвер может вызываться в служебных апдейтах/логировании
+				systemDriver.EXPECT().Name().Return(StorageNameForTransactionsTable).AnyTimes()
+				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return newTestService(t, systemDriver, userDriver)
+			},
+			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
+				t.Helper()
+
+				return map[storage.Driver]*storage.Request{
+					mock: {
+						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+						Args: []any{"1"},
+					},
+				}
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "finish tx error")
 			}),
 		},
 	}
@@ -431,7 +229,327 @@ func TestExecRequests(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.svc.ExecRequests(t.Context(), tt.requests)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			systemDriver := mocks.NewMockDriver(ctrl)
+			userDriver := mocks.NewMockDriver(ctrl)
+
+			err := tt.setupSvc(t, systemDriver, userDriver).ExecRequests(t.Context(), tt.requests(t, userDriver))
+			tt.wantErr(t, err)
+		})
+	}
+}
+
+//nolint:funlen // много тест-кейсов
+func TestCommit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		createTx   func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor
+		wantStatus string
+		wantErr    require.ErrorAssertionFunc
+	}{
+		{
+			name: "positive case",
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				originalTx, err := storage.NewTransaction(
+					map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					},
+					1,
+					[]byte{0x1, 0x2, 0x3},
+				)
+
+				require.NoError(t, err)
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithOriginalTx(originalTx),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantStatus: string(storage.TxStatusSuccess),
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				// commit в пользовательском хранилище
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil)
+
+				systemDriver.EXPECT().Name().Return(StorageNameForTransactionsTable).AnyTimes()
+				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres)
+
+				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil)
+				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil)
+
+				return newTestService(t, systemDriver, userDriver)
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "error case: transaction is not in progress",
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusSuccess)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantStatus: string(storage.TxStatusSuccess),
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				return newTestService(t, systemDriver, userDriver)
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "transaction status not equal to: \"IN_PROGRESS\"")
+			}),
+		},
+		{
+			name: "error case: commit error",
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantStatus: string(storage.TxStatusFailed),
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(errors.New("test error"))
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil)
+
+				systemDriver.EXPECT().Name().Return(StorageNameForTransactionsTable).AnyTimes()
+				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
+				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+				return newTestService(t, systemDriver, userDriver)
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "error exec with rollback: error commit driver: test error")
+			}),
+		},
+		{
+			name: "error case: updateTX error",
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantStatus: string(storage.TxStatusSuccess),
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil)
+
+				return newTestService(t, systemDriver, userDriver)
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "error updating transaction when committing")
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			systemDriver := mocks.NewMockDriver(ctrl)
+			userDriver := mocks.NewMockDriver(ctrl)
+
+			tx := tt.createTx(t, userDriver)
+
+			err := tt.createSvc(t, systemDriver, userDriver).Commit(t.Context(), tx)
+			tt.wantErr(t, err)
+
+			assert.Equal(t, tt.wantStatus, tx.Status())
+		})
+	}
+}
+
+//nolint:funlen // много тест-кейсов
+func TestRollback(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		createSvc func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		createTx  func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor
+		wantErr   require.ErrorAssertionFunc
+	}{
+		{
+			name: "positive case",
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
+							},
+						},
+					},
+				}
+			},
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusFailed)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "error rollback in driver",
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(errors.New("test error")).Times(1)
+
+				userDriver.EXPECT().Name().Return("test-storage").Times(1)
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
+							},
+						},
+					},
+				}
+			},
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusFailed)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "error case: transaction is not failed",
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
+							},
+						},
+					},
+				}
+			},
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "transaction status not equal to: \"FAILED\"")
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			systemDriver := mocks.NewMockDriver(ctrl)
+			userDriver := mocks.NewMockDriver(ctrl)
+
+			err := tt.createSvc(t, systemDriver, userDriver).Rollback(t.Context(), tt.createTx(t, userDriver))
 			tt.wantErr(t, err)
 		})
 	}
@@ -441,324 +559,405 @@ func TestExecRequests(t *testing.T) {
 func TestExecWithTx(t *testing.T) {
 	t.Parallel()
 
-	txID := random.String(10)
-
 	tests := []struct {
-		name      string
-		svc       *Service
-		tx        *transaction
-		driver    storage.Driver
-		req       *storage.Request
-		wantTx    *transaction
-		wantErr   require.ErrorAssertionFunc
-		checTxErr func(t *testing.T, tx *transaction)
+		name       string
+		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		createTx   func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor
+		wantStatus string
+		wantErr    require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			svc: func() *Service {
-				driver := &mockStorage{name: "test-storage"}
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test-operation",
 					},
-					transactions: map[string]*transaction{
-						txID: {
-							id:     txID,
-							status: txStatusInProgress,
-							requests: map[storage.Driver]*storage.Request{
-								driver: {
-									Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-									Args: []any{"1"},
-								},
-							},
-							failedDriver: "",
-						},
-					},
-					driversMap: map[string]drivers{
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
 						"test-storage": {
-							driver: driver,
+							driver: userDriver,
 							cfg: operation.StorageCfg{
 								Name: "test-storage",
 							},
 						},
 					},
 				}
-			}(),
-			tx: func() *transaction {
-				driver := &mockStorage{name: "test-storage"}
-
-				return &transaction{
-					id:     txID,
-					status: txStatusInProgress,
-					requests: map[storage.Driver]*storage.Request{
-						driver: {
-							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-							Args: []any{"1"},
-						},
-					},
-					failedDriver: "",
-				}
-			}(),
-			driver: &mockStorage{name: "test-storage"},
-			req: &storage.Request{
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
 			},
-			wantTx: func() *transaction {
-				driver := &mockStorage{name: "test-storage"}
+			wantStatus: string(storage.TxStatusInProgress),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
 
-				return &transaction{
-					id:     txID,
-					status: txStatusInProgress,
-					requests: map[storage.Driver]*storage.Request{
-						driver: {
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
 							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
 							Args: []any{"1"},
 						},
-					},
-					failedDriver: "",
-				}
-			}(),
+					}),
+				)
+			},
 			wantErr: require.NoError,
 		},
 		{
 			name: "error case: exec error",
-			svc: func() *Service {
-				driverExecError := &mockStorage{name: "test-storage", execError: errors.New("test error")}
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("test error")).Times(1)
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test-operation",
 					},
-					transactions: map[string]*transaction{
-						txID: {
-							id:     txID,
-							status: txStatusInProgress,
-							requests: map[storage.Driver]*storage.Request{
-								driverExecError: {
-									Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-									Args: []any{"1"},
-								},
-							},
-							failedDriver: "",
-						},
-					},
-					driversMap: map[string]drivers{
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
 						"test-storage": {
-							driver: driverExecError,
+							driver: userDriver,
 							cfg: operation.StorageCfg{
 								Name: "test-storage",
 							},
 						},
 					},
 				}
-			}(),
-			tx: func() *transaction {
-				driverExecError := &mockStorage{name: "test-storage", execError: errors.New("test error")}
-
-				return &transaction{
-					id:     txID,
-					status: txStatusInProgress,
-					requests: map[storage.Driver]*storage.Request{
-						driverExecError: {
-							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-							Args: []any{"1"},
-						},
-					},
-					failedDriver: "",
-				}
-			}(),
-			driver: &mockStorage{name: "test-storage", execError: errors.New("test error")},
-			req: &storage.Request{
-				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-				Args: []any{"1"},
 			},
-			wantTx: func() *transaction {
-				driverExecError := &mockStorage{name: "test-storage", execError: errors.New("test error")}
-
-				return &transaction{
-					id:     txID,
-					status: txStatusFailed,
-					requests: map[storage.Driver]*storage.Request{
-						driverExecError: {
-							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-							Args: []any{"1"},
-						},
-					},
-					failedDriver: "test-storage",
-					err:          errors.New("test error"),
-				}
-			}(),
-			checTxErr: func(t *testing.T, tx *transaction) {
+			wantStatus: string(storage.TxStatusFailed),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
 				t.Helper()
 
-				assert.EqualError(t, tx.err, "test error")
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
 			},
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
 				require.ErrorContains(t, err, "error exec request: test error")
 			}),
 		},
+		{
+			name: "error: transaction is not in progress",
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
+							},
+						},
+					},
+				}
+			},
+			wantStatus: string(storage.TxStatusSuccess),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusSuccess)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "transaction status not equal to: \"IN_PROGRESS\"")
+			}),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Используем транзакцию из сервиса, а не отдельную
-			txFromService := tt.svc.transactions[tt.tx.id]
-			require.NotNil(t, txFromService)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-			err := tt.svc.execWithTx(t.Context(), txFromService, tt.driver, tt.req)
+			systemDriver := mocks.NewMockDriver(ctrl)
+			userDriver := mocks.NewMockDriver(ctrl)
+
+			tx := tt.createTx(t, userDriver)
+
+			err := tt.createSvc(t, systemDriver, userDriver).execWithTx(t.Context(), tx, userDriver, &storage.Request{
+				Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+				Args: []any{"1"},
+			})
+
 			tt.wantErr(t, err)
 
-			tx := tt.svc.transactions[tt.tx.id]
-			require.NotNil(t, tx)
-
-			// Проверяем основные поля транзакции
-			assert.Equal(t, tt.wantTx.id, tx.id)
-			assert.Equal(t, tt.wantTx.status, tx.status)
-			assert.Equal(t, tt.wantTx.failedDriver, tx.failedDriver)
-
-			if tt.checTxErr != nil {
-				tt.checTxErr(t, tx)
-			}
-
-			// Проверяем, что exec был вызван
-			assert.True(t, tt.driver.(*mockStorage).getExecCalled())
+			assert.Equal(t, tt.wantStatus, tx.Status())
 		})
 	}
 }
 
-//nolint:funlen // длинный тест
+//nolint:funlen,dupl // длинный тест, похожие тесты
 func TestExecWithRollback(t *testing.T) {
 	t.Parallel()
 
-	txID := random.String(10)
-
-	driver := &mockStorage{name: "test-storage"}
-
 	tests := []struct {
-		name        string
-		svc         *Service
-		tx          *transaction
-		fn          func() error
-		driver      storage.Driver
-		req         *storage.Request
-		wantTx      transaction
-		wantErr     require.ErrorAssertionFunc
-		checkTx     func(t *testing.T, svc *Service, wantTx transaction)
-		checkDriver func(t *testing.T, driver *mockStorage)
+		name       string
+		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		createTx   func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor
+		execFn     func() error
+		wantStatus string
+		wantErr    require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test-operation",
-				},
-				transactions: map[string]*transaction{
-					txID: {
-						id:     txID,
-						status: txStatusInProgress,
-						requests: map[storage.Driver]*storage.Request{
-							driver: {
-								Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-								Args: []any{"1"},
+			execFn: func() error {
+				return nil
+			},
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
 							},
 						},
 					},
-				},
+				}
 			},
-			tx: &transaction{
-				id:     txID,
-				status: txStatusInProgress,
-				requests: map[storage.Driver]*storage.Request{
-					driver: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
-			},
-			wantTx: transaction{
-				id:     txID,
-				status: txStatusInProgress,
-				requests: map[storage.Driver]*storage.Request{
-					driver: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
-			},
-			fn:      func() error { return nil },
-			driver:  driver,
-			wantErr: require.NoError,
-			checkTx: func(t *testing.T, svc *Service, wantTx transaction) {
+			wantStatus: string(storage.TxStatusInProgress),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
 				t.Helper()
 
-				tx := svc.transactions[txID]
-				require.NotEmpty(t, tx)
-				assert.Equal(t, &wantTx, tx)
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
 			},
+			wantErr: require.NoError,
 		},
 		{
-			name: "error case: fn error",
-			svc: &Service{
-				cfg: &operation.Operation{
-					Name: "test-operation",
-				},
-				transactions: map[string]*transaction{
-					txID: {
-						id:     txID,
-						status: txStatusInProgress,
-						requests: map[storage.Driver]*storage.Request{
-							driver: {
-								Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-								Args: []any{"1"},
+			name: "error: transaction is not in progress",
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
 							},
 						},
 					},
-				},
+				}
 			},
-			tx: &transaction{
-				id:     txID,
-				status: txStatusInProgress,
-				requests: map[storage.Driver]*storage.Request{
-					driver: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
+			execFn: func() error {
+				return nil
 			},
-			wantTx: transaction{
-				id:           txID,
-				status:       txStatusFailed,
-				failedDriver: "test-storage",
-				err:          errors.New("test error"),
-				requests: map[storage.Driver]*storage.Request{
-					driver: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				},
+			wantStatus: string(storage.TxStatusSuccess),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusSuccess)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
 			},
-			fn:     func() error { return errors.New("test error") },
-			driver: driver,
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
-				require.ErrorContains(t, err, "test error")
+				require.ErrorContains(t, err, "transaction status not equal to: \"IN_PROGRESS\"")
 			}),
-			checkTx: func(t *testing.T, svc *Service, wantTx transaction) {
+		},
+		{
+			name: "error: function error",
+			execFn: func() error {
+				return errors.New("test error")
+			},
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
 				t.Helper()
 
-				// после фейла должна быть удалена
-				require.Empty(t, svc.transactions[txID])
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
+							},
+						},
+					},
+					transactionDriversMap: map[string]DriversMap{
+						StorageNameForTransactionsTable: {
+							driver: systemDriver,
+							cfg: operation.StorageCfg{
+								Name:  StorageNameForTransactionsTable,
+								Table: "transactions.transactions",
+							},
+						},
+						StorageNameForRequestsTable: {
+							driver: systemDriver,
+							cfg: operation.StorageCfg{
+								Name:  StorageNameForRequestsTable,
+								Table: "transactions.requests",
+							},
+						},
+					},
+					systemStoragesMap: map[string]storage.Driver{
+						StorageNameForTransactionsTable: systemDriver,
+					},
+					systemStorageConfigs: []operation.StorageCfg{
+						{
+							Name:  StorageNameForTransactionsTable,
+							Type:  operation.StorageTypePostgres,
+							Table: "transactions.transactions",
+						},
+						{
+							Name:  StorageNameForRequestsTable,
+							Type:  operation.StorageTypePostgres,
+							Table: "transactions.requests",
+						},
+					},
+					instanceID: 1,
+				}
 			},
-			checkDriver: func(t *testing.T, driver *mockStorage) {
+			wantStatus: string(storage.TxStatusFailed),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
 				t.Helper()
 
-				assert.True(t, driver.rolledBack)
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
 			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "error exec with rollback: test error")
+			}),
+		},
+		{
+			name: "error: rollback error",
+			execFn: func() error {
+				return errors.New("test error")
+			},
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+				t.Helper()
+
+				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(errors.New("test rollback error")).Times(1)
+
+				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return &Service{
+					cfg: &operation.Operation{
+						Name: "test-operation",
+					},
+					storage: systemDriver,
+					userDriversMap: map[string]DriversMap{
+						"test-storage": {
+							driver: userDriver,
+							cfg: operation.StorageCfg{
+								Name: "test-storage",
+							},
+						},
+					},
+					transactionDriversMap: map[string]DriversMap{
+						StorageNameForTransactionsTable: {
+							driver: systemDriver,
+							cfg: operation.StorageCfg{
+								Name:  StorageNameForTransactionsTable,
+								Table: "transactions.transactions",
+							},
+						},
+						StorageNameForRequestsTable: {
+							driver: systemDriver,
+							cfg: operation.StorageCfg{
+								Name:  StorageNameForRequestsTable,
+								Table: "transactions.requests",
+							},
+						},
+					},
+					systemStoragesMap: map[string]storage.Driver{
+						StorageNameForTransactionsTable: systemDriver,
+					},
+					systemStorageConfigs: []operation.StorageCfg{
+						{
+							Name:  StorageNameForTransactionsTable,
+							Type:  operation.StorageTypePostgres,
+							Table: "transactions.transactions",
+						},
+						{
+							Name:  StorageNameForRequestsTable,
+							Type:  operation.StorageTypePostgres,
+							Table: "transactions.requests",
+						},
+					},
+					instanceID: 1,
+				}
+			},
+			wantStatus: string(storage.TxStatusFailed),
+			createTx: func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor {
+				t.Helper()
+
+				return testtransaction.NewTestTransaction(
+					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
+					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
+						userDriver: {
+							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
+							Args: []any{"1"},
+						},
+					}),
+				)
+			},
+			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "error exec with rollback: test error")
+			}),
 		},
 	}
 
@@ -766,12 +965,18 @@ func TestExecWithRollback(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.svc.execWithRollback(t.Context(), tt.tx, tt.driver, tt.fn)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			systemDriver := mocks.NewMockDriver(ctrl)
+			userDriver := mocks.NewMockDriver(ctrl)
+
+			tx := tt.createTx(t, userDriver)
+
+			err := tt.createSvc(t, systemDriver, userDriver).execWithRollback(t.Context(), tx, userDriver, tt.execFn)
 			tt.wantErr(t, err)
 
-			tt.checkTx(t, tt.svc, tt.wantTx)
-
-			driver.clear()
+			assert.Equal(t, tt.wantStatus, tx.Status())
 		})
 	}
 }

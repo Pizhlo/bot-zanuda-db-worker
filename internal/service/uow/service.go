@@ -6,7 +6,6 @@ import (
 	"db-worker/internal/storage"
 	"errors"
 	"fmt"
-	"sync"
 )
 
 // Service - сервис для работы с хранилищами.
@@ -14,14 +13,24 @@ import (
 type Service struct {
 	cfg *operation.Operation
 
-	mu           sync.RWMutex
-	transactions map[string]*transaction // транзакции, которые начаты
+	userStoragesMap map[string]storage.Driver // драйвера для работы с хранилищами
+	userDriversMap  map[string]DriversMap     // поле для сопоставления драйвера хранения и конфигурации
 
-	storagesMap map[string]storage.Driver // драйвера для работы с хранилищами
-	driversMap  map[string]drivers        // поле для сопоставления драйвера хранения и конфигурации
+	instanceID int
+
+	// хранилище, куда сохранять транзакции (не кэш)
+	storage storage.Driver
+
+	transactionDriversMap map[string]DriversMap     // системные хранилища, куда сохраняется состояние транзакции
+	systemStoragesMap     map[string]storage.Driver // системные хранилища, куда сохраняется состояние транзакции
+
+	requestsDriversMap map[string]DriversMap // системные хранилища, куда сохраняются запросы
+
+	systemStorageConfigs []operation.StorageCfg // конфигурация системных хранилищ (кэш, БД)
 }
 
-type drivers struct {
+// DriversMap - структура, связывающая драйвер хранилища и его конфигурацию.
+type DriversMap struct {
 	driver storage.Driver
 	cfg    operation.StorageCfg
 }
@@ -31,10 +40,8 @@ type option func(*Service)
 // WithStorages устанавливает драйвера для работы с хранилищами.
 func WithStorages(storages []storage.Driver) option {
 	return func(s *Service) {
-		s.storagesMap = make(map[string]storage.Driver)
-
 		for _, storage := range storages {
-			s.storagesMap[string(storage.Name())] = storage
+			s.userStoragesMap[string(storage.Name())] = storage
 		}
 	}
 }
@@ -46,13 +53,55 @@ func WithCfg(cfg *operation.Operation) option {
 	}
 }
 
+const (
+	// StorageNameForTransactionsTable - константа для сохранения конфига системного хранилища для таблицы транзакций.
+	StorageNameForTransactionsTable = "system-storage.transactions-table"
+
+	// StorageNameForRequestsTable - константа для сохранения конфига системного хранилища для таблицы запросов.
+	StorageNameForRequestsTable = "system-storage.requests-table"
+)
+
+// WithStorage устанавливает репозиторий для хранения транзакций.
+func WithStorage(systemStorage storage.Driver) option {
+	return func(s *Service) {
+		s.storage = systemStorage
+
+		// сохраняем одно соединение под двумя разными названиями: для таблицы transactions.transactions и transactions.requests
+		s.systemStoragesMap[StorageNameForTransactionsTable] = systemStorage
+		s.systemStoragesMap[StorageNameForRequestsTable] = systemStorage
+	}
+}
+
+// WithInstanceID устанавливает идентификатор экземпляра приложения.
+func WithInstanceID(id int) option {
+	return func(s *Service) {
+		s.instanceID = id
+	}
+}
+
+// WithSystemStorageConfigs устанавливает конфигурации системных хранилищ.
+func WithSystemStorageConfigs(configs []operation.StorageCfg) option {
+	return func(s *Service) {
+		s.systemStorageConfigs = configs
+	}
+}
+
 // New создает новый экземпляр сервиса.
 // Возможные ошибки:
 //   - cfg is required - не передан конфиг
 //   - storages are required - не переданы драйвера для работы с хранилищами
 //   - error mapping storages - ошибка при сопоставлении драйверов с конфигурациями хранилищ
 func New(opts ...option) (*Service, error) {
-	s := &Service{}
+	s := &Service{
+		systemStoragesMap:     make(map[string]storage.Driver),
+		transactionDriversMap: make(map[string]DriversMap),
+		userDriversMap:        make(map[string]DriversMap),
+		userStoragesMap:       make(map[string]storage.Driver),
+		instanceID:            0,
+		cfg:                   nil,
+		storage:               nil,
+		systemStorageConfigs:  make([]operation.StorageCfg, 0),
+	}
 
 	for _, opt := range opts {
 		opt(s)
@@ -62,48 +111,48 @@ func New(opts ...option) (*Service, error) {
 		return nil, errors.New("cfg is required")
 	}
 
-	if len(s.storagesMap) == 0 {
+	if len(s.userStoragesMap) == 0 {
 		return nil, errors.New("storages are required")
 	}
 
-	if err := s.mapStorages(); err != nil {
-		return nil, fmt.Errorf("error mapping storages: %w", err)
+	if s.storage == nil {
+		return nil, errors.New("storage is required")
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if len(s.systemStorageConfigs) == 0 {
+		return nil, errors.New("system storage configs are required")
+	}
 
-	s.transactions = make(map[string]*transaction)
+	s.userDriversMap = make(map[string]DriversMap)
+
+	if err := mapStoragesConfigs(s.userDriversMap, s.cfg.Storages, s.userStoragesMap); err != nil {
+		return nil, fmt.Errorf("error mapping user storages: %w", err)
+	}
+
+	s.transactionDriversMap = make(map[string]DriversMap)
+
+	if err := mapStoragesConfigs(s.transactionDriversMap, s.systemStorageConfigs, s.systemStoragesMap); err != nil {
+		return nil, fmt.Errorf("error mapping system storages: %w", err)
+	}
+
+	s.requestsDriversMap = make(map[string]DriversMap)
+
+	s.requestsDriversMap[StorageNameForRequestsTable] = s.transactionDriversMap[StorageNameForRequestsTable]
+	delete(s.transactionDriversMap, StorageNameForRequestsTable)
 
 	return s, nil
 }
 
-func (s *Service) mapStorages() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.driversMap = make(map[string]drivers)
-
-	for _, storage := range s.cfg.Storages {
-		driver, ok := s.storagesMap[string(storage.Name)]
-		if !ok {
-			return fmt.Errorf("storage %q not found", storage.Name)
-		}
-
-		s.driversMap[storage.Name] = drivers{
-			driver: driver,
-			cfg:    storage,
-		}
-	}
-
-	return nil
+// StoragesMap возвращает мапу с драйверами для работы с хранилищами.
+func (s *Service) StoragesMap() map[string]DriversMap {
+	return s.userDriversMap
 }
 
 // BuildRequests принимает на вход сообщение в виде мапы. Возвращает мапу с запросами для каждого драйвера.
-func (s *Service) BuildRequests(msg map[string]interface{}) (map[storage.Driver]*storage.Request, error) {
+func (s *Service) BuildRequests(msg map[string]interface{}, driversMap map[string]DriversMap, operation operation.Operation) (map[storage.Driver]*storage.Request, error) {
 	res := make(map[storage.Driver]*storage.Request)
 
-	for _, storage := range s.driversMap {
+	for _, storage := range driversMap {
 		var (
 			builder builder_pkg.Builder
 			err     error
@@ -114,11 +163,11 @@ func (s *Service) BuildRequests(msg map[string]interface{}) (map[storage.Driver]
 			return nil, fmt.Errorf("error get builder by storage type %q: %w", storage.driver.Type(), err)
 		}
 
-		builder = builder.WithOperation(*s.cfg).WithValues(msg).WithTable(storage.cfg.Table)
+		builder = builder.WithOperation(operation).WithValues(msg).WithTable(storage.cfg.Table)
 
-		builder, err = setOperationType(builder, s.cfg.Type)
+		builder, err = setOperationType(builder, operation.Type)
 		if err != nil {
-			return nil, fmt.Errorf("error set operation type %q: %w", s.cfg.Type, err)
+			return nil, fmt.Errorf("error set operation type %q: %w", operation.Type, err)
 		}
 
 		req, err := builder.Build()
@@ -150,4 +199,20 @@ func setOperationType(builder builder_pkg.Builder, operationType operation.Type)
 	default:
 		return nil, fmt.Errorf("unknown operation type: %s", operationType)
 	}
+}
+
+func mapStoragesConfigs(driversCfgMap map[string]DriversMap, storagesCfg []operation.StorageCfg, storagesMap map[string]storage.Driver) error {
+	for _, cfg := range storagesCfg {
+		driver, ok := storagesMap[string(cfg.Name)]
+		if !ok {
+			return fmt.Errorf("storage %q not found", cfg.Name)
+		}
+
+		driversCfgMap[cfg.Name] = DriversMap{
+			driver: driver,
+			cfg:    cfg,
+		}
+	}
+
+	return nil
 }

@@ -7,8 +7,12 @@ import (
 	"db-worker/internal/service/uow"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/storage"
+	"db-worker/internal/storage/mocks"
 	"testing"
 
+	postgres "db-worker/internal/storage/postgres/repo"
+
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,19 +74,9 @@ func TestFormatPostgresAddr(t *testing.T) {
 func TestGroupStorages(t *testing.T) {
 	t.Parallel()
 
-	// Создаем мок storages
-	mockStorage1 := &mockStorage{name: "storage1"}
-	mockStorage2 := &mockStorage{name: "storage2"}
-
-	storagesMap := map[string]storage.Driver{
-		"storage1": mockStorage1,
-		"storage2": mockStorage2,
-	}
-
 	tests := []struct {
 		name        string
 		storagesCfg []operation.StorageCfg
-		storageMap  map[string]storage.Driver
 		expectError bool
 		errorMsg    string
 		expectedLen int
@@ -93,7 +87,6 @@ func TestGroupStorages(t *testing.T) {
 				{Name: "storage1"},
 				{Name: "storage2"},
 			},
-			storageMap:  storagesMap,
 			expectError: false,
 			expectedLen: 2,
 		},
@@ -102,7 +95,6 @@ func TestGroupStorages(t *testing.T) {
 			storagesCfg: []operation.StorageCfg{
 				{Name: "storage1"},
 			},
-			storageMap:  storagesMap,
 			expectError: false,
 			expectedLen: 1,
 		},
@@ -111,14 +103,12 @@ func TestGroupStorages(t *testing.T) {
 			storagesCfg: []operation.StorageCfg{
 				{Name: "nonexistent"},
 			},
-			storageMap:  storagesMap,
 			expectError: true,
 			errorMsg:    "storage nonexistent not found",
 		},
 		{
 			name:        "empty storages",
 			storagesCfg: []operation.StorageCfg{},
-			storageMap:  storagesMap,
 			expectError: false,
 			expectedLen: 0,
 		},
@@ -128,7 +118,19 @@ func TestGroupStorages(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			storages, err := groupStorages(tt.storagesCfg, tt.storageMap)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			// Создаем мок storages
+			mockStorage1 := mocks.NewMockDriver(ctrl)
+			mockStorage2 := mocks.NewMockDriver(ctrl)
+
+			storagesMap := map[string]storage.Driver{
+				"storage1": mockStorage1,
+				"storage2": mockStorage2,
+			}
+
+			storages, err := groupStorages(tt.storagesCfg, storagesMap)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -141,47 +143,6 @@ func TestGroupStorages(t *testing.T) {
 			}
 		})
 	}
-}
-
-// mockStorage - мок для тестирования.
-type mockStorage struct {
-	name string
-}
-
-func (m *mockStorage) Name() string {
-	return m.name
-}
-
-func (m *mockStorage) Run(_ context.Context) error {
-	return nil
-}
-
-func (m *mockStorage) Exec(_ context.Context, _ *storage.Request, _ string) error {
-	return nil
-}
-
-func (m *mockStorage) Stop(_ context.Context) error {
-	return nil
-}
-
-func (m *mockStorage) Type() operation.StorageType {
-	return operation.StorageTypePostgres
-}
-
-func (m *mockStorage) Begin(_ context.Context, _ string) error {
-	return nil
-}
-
-func (m *mockStorage) Commit(_ context.Context, _ string) error {
-	return nil
-}
-
-func (m *mockStorage) Rollback(_ context.Context, _ string) error {
-	return nil
-}
-
-func (m *mockStorage) FinishTx(_ context.Context, _ string) error {
-	return nil
 }
 
 type mockWorker struct {
@@ -241,6 +202,12 @@ func TestInitOperation(t *testing.T) {
 		Name: "test-operation",
 	}
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDriver := mocks.NewMockDriver(ctrl)
+	mockStorage := mocks.NewMockDriver(ctrl)
+
 	connection := &mockWorker{
 		name:          "test-connection",
 		msgChan:       make(chan map[string]interface{}),
@@ -252,12 +219,22 @@ func TestInitOperation(t *testing.T) {
 	}
 
 	storages := []storage.Driver{
-		&mockStorage{name: "test-storage"},
+		mockDriver,
 	}
+
+	mockDriver.EXPECT().Name().Return("test-storage").Times(1)
 
 	uowService, err := uow.New(
 		uow.WithStorages(storages),
 		uow.WithCfg(&cfg),
+		uow.WithStorage(mockStorage),
+		uow.WithSystemStorageConfigs([]operation.StorageCfg{
+			{
+				Name:  uow.StorageNameForRequestsTable,
+				Type:  operation.StorageTypePostgres,
+				Table: "test-table",
+			},
+		}),
 	)
 	require.NoError(t, err)
 
@@ -266,8 +243,17 @@ func TestInitOperation(t *testing.T) {
 	require.NotNil(t, srv)
 }
 
+//nolint:funlen // много тест-кейсов
 func TestInitOperationServices(t *testing.T) {
 	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage1 := mocks.NewMockDriver(ctrl)
+	mockStorage2 := mocks.NewMockDriver(ctrl)
+	mockStorage3 := mocks.NewMockDriver(ctrl)
+	mockStorage4 := mocks.NewMockDriver(ctrl)
 
 	cfg := &config.Config{
 		Operations: operation.OperationConfig{
@@ -295,11 +281,6 @@ func TestInitOperationServices(t *testing.T) {
 		},
 	}
 
-	storage1 := &mockStorage{name: "test-storage-1"}
-	storage2 := &mockStorage{name: "test-storage-2"}
-	storage3 := &mockStorage{name: "test-storage-3"}
-	storage4 := &mockStorage{name: "test-storage-4"}
-
 	connection1 := &mockWorker{name: "test-connection-1", msgChan: make(chan map[string]interface{})}
 	connection2 := &mockWorker{name: "test-connection-2", msgChan: make(chan map[string]interface{})}
 
@@ -309,13 +290,36 @@ func TestInitOperationServices(t *testing.T) {
 	}
 
 	storagesMap := map[string]storage.Driver{
-		"test-storage-1": storage1,
-		"test-storage-2": storage2,
-		"test-storage-3": storage3,
-		"test-storage-4": storage4,
+		"test-storage-1": mockStorage1,
+		"test-storage-2": mockStorage2,
+		"test-storage-3": mockStorage3,
+		"test-storage-4": mockStorage4,
 	}
 
-	services, err := initOperationServices(cfg, connections, storagesMap)
+	mockStorage1.EXPECT().Name().Return("test-storage-1").Times(1)
+	mockStorage2.EXPECT().Name().Return("test-storage-2").Times(1)
+	mockStorage3.EXPECT().Name().Return("test-storage-3").Times(1)
+	mockStorage4.EXPECT().Name().Return("test-storage-4").Times(1)
+
+	opts := []postgres.RepoOption{
+		postgres.WithAddr("test-addr"),
+		postgres.WithInsertTimeout(1000),
+		postgres.WithReadTimeout(1000),
+		postgres.WithCfg(&config.Postgres{
+			Host:     "test-host",
+			Port:     5432,
+			User:     "test-user",
+			Password: "test-password",
+			DBName:   "test-db",
+		}),
+		postgres.WithTable("test-table"),
+		postgres.WithName("test connection"),
+	}
+
+	repo, err := postgres.New(context.Background(), opts...)
+	require.NoError(t, err)
+
+	services, err := initOperationServices(cfg, connections, storagesMap, repo)
 	require.NoError(t, err)
 	require.NotNil(t, services)
 
