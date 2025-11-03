@@ -40,7 +40,7 @@ type OperationConfig struct {
 type Operation struct {
 	Name     string       `yaml:"name" validate:"required"`
 	Timeout  int          `yaml:"timeout" validate:"required,min=1"` // время ожидания операции в миллисекундах
-	Type     Type         `yaml:"type" validate:"required,oneof=create update delete delete_all"`
+	Type     Type         `yaml:"type" validate:"required,oneof=create update delete"`
 	Storages []StorageCfg `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией
 	Fields   []Field      `yaml:"fields" validate:"required,dive"`
 	Request  Request      `yaml:"request" validate:"required"`
