@@ -326,9 +326,9 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 			driversMap[storage.Name()] = storage
 		}
 
-		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs)
+		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID)
 
-		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap)
+		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap, cfg.InstanceID)
 
 		operations[operationCfg.Name] = op
 	}
@@ -355,12 +355,13 @@ func groupStorages(storagesCfg []operation.StorageCfg, storagesMap map[string]st
 	return storages, nil
 }
 
-func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo storage.Driver, systemStorageConfigs []operation.StorageCfg) *uow.Service {
+func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo storage.Driver, systemStorageConfigs []operation.StorageCfg, instanceID int) *uow.Service {
 	return start(uow.New(
 		uow.WithStorages(storages),
 		uow.WithCfg(operationCfg),
 		uow.WithStorage(repo),
 		uow.WithSystemStorageConfigs(systemStorageConfigs),
+		uow.WithInstanceID(instanceID),
 	))
 }
 
@@ -372,13 +373,14 @@ func initRedisStorage(ctx context.Context, cfg config.Redis) *redis.Service {
 	return redis
 }
 
-func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator) *operation_srv.Service {
+func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator, instanceID int) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
 		operation_srv.WithMsgChan(connection.MsgChan()),
 		operation_srv.WithUow(uow),
 		operation_srv.WithMessageRepo(messageRepo),
 		operation_srv.WithDriversMap(driversMap),
+		operation_srv.WithInstanceID(instanceID),
 	))
 
 	return op

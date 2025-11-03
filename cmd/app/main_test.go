@@ -246,7 +246,7 @@ func TestInitOperation(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap)
+	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1)
 
 	require.NotNil(t, srv)
 }
