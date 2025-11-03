@@ -446,31 +446,31 @@ func (mr *MockrunnerMockRecorder) Stop(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*Mockrunner)(nil).Stop), ctx)
 }
 
-// Mockconfigurator is a mock of configurator interface.
-type Mockconfigurator struct {
+// MockConfigurator is a mock of Configurator interface.
+type MockConfigurator struct {
 	ctrl     *gomock.Controller
-	recorder *MockconfiguratorMockRecorder
+	recorder *MockConfiguratorMockRecorder
 }
 
-// MockconfiguratorMockRecorder is the mock recorder for Mockconfigurator.
-type MockconfiguratorMockRecorder struct {
-	mock *Mockconfigurator
+// MockConfiguratorMockRecorder is the mock recorder for MockConfigurator.
+type MockConfiguratorMockRecorder struct {
+	mock *MockConfigurator
 }
 
-// NewMockconfigurator creates a new mock instance.
-func NewMockconfigurator(ctrl *gomock.Controller) *Mockconfigurator {
-	mock := &Mockconfigurator{ctrl: ctrl}
-	mock.recorder = &MockconfiguratorMockRecorder{mock}
+// NewMockConfigurator creates a new mock instance.
+func NewMockConfigurator(ctrl *gomock.Controller) *MockConfigurator {
+	mock := &MockConfigurator{ctrl: ctrl}
+	mock.recorder = &MockConfiguratorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockconfigurator) EXPECT() *MockconfiguratorMockRecorder {
+func (m *MockConfigurator) EXPECT() *MockConfiguratorMockRecorder {
 	return m.recorder
 }
 
 // DBName mocks base method.
-func (m *Mockconfigurator) DBName() string {
+func (m *MockConfigurator) DBName() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DBName")
 	ret0, _ := ret[0].(string)
@@ -478,13 +478,13 @@ func (m *Mockconfigurator) DBName() string {
 }
 
 // DBName indicates an expected call of DBName.
-func (mr *MockconfiguratorMockRecorder) DBName() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) DBName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DBName", reflect.TypeOf((*Mockconfigurator)(nil).DBName))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DBName", reflect.TypeOf((*MockConfigurator)(nil).DBName))
 }
 
 // Host mocks base method.
-func (m *Mockconfigurator) Host() string {
+func (m *MockConfigurator) Host() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Host")
 	ret0, _ := ret[0].(string)
@@ -492,13 +492,13 @@ func (m *Mockconfigurator) Host() string {
 }
 
 // Host indicates an expected call of Host.
-func (mr *MockconfiguratorMockRecorder) Host() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Host() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*Mockconfigurator)(nil).Host))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockConfigurator)(nil).Host))
 }
 
 // InsertTimeout mocks base method.
-func (m *Mockconfigurator) InsertTimeout() int {
+func (m *MockConfigurator) InsertTimeout() int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InsertTimeout")
 	ret0, _ := ret[0].(int)
@@ -506,13 +506,13 @@ func (m *Mockconfigurator) InsertTimeout() int {
 }
 
 // InsertTimeout indicates an expected call of InsertTimeout.
-func (mr *MockconfiguratorMockRecorder) InsertTimeout() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) InsertTimeout() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertTimeout", reflect.TypeOf((*Mockconfigurator)(nil).InsertTimeout))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertTimeout", reflect.TypeOf((*MockConfigurator)(nil).InsertTimeout))
 }
 
 // Name mocks base method.
-func (m *Mockconfigurator) Name() string {
+func (m *MockConfigurator) Name() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Name")
 	ret0, _ := ret[0].(string)
@@ -520,13 +520,13 @@ func (m *Mockconfigurator) Name() string {
 }
 
 // Name indicates an expected call of Name.
-func (mr *MockconfiguratorMockRecorder) Name() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Name() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*Mockconfigurator)(nil).Name))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockConfigurator)(nil).Name))
 }
 
 // Password mocks base method.
-func (m *Mockconfigurator) Password() string {
+func (m *MockConfigurator) Password() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Password")
 	ret0, _ := ret[0].(string)
@@ -534,13 +534,13 @@ func (m *Mockconfigurator) Password() string {
 }
 
 // Password indicates an expected call of Password.
-func (mr *MockconfiguratorMockRecorder) Password() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Password() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Password", reflect.TypeOf((*Mockconfigurator)(nil).Password))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Password", reflect.TypeOf((*MockConfigurator)(nil).Password))
 }
 
 // Port mocks base method.
-func (m *Mockconfigurator) Port() int {
+func (m *MockConfigurator) Port() int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Port")
 	ret0, _ := ret[0].(int)
@@ -548,13 +548,13 @@ func (m *Mockconfigurator) Port() int {
 }
 
 // Port indicates an expected call of Port.
-func (mr *MockconfiguratorMockRecorder) Port() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Port() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Port", reflect.TypeOf((*Mockconfigurator)(nil).Port))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Port", reflect.TypeOf((*MockConfigurator)(nil).Port))
 }
 
 // Queue mocks base method.
-func (m *Mockconfigurator) Queue() string {
+func (m *MockConfigurator) Queue() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Queue")
 	ret0, _ := ret[0].(string)
@@ -562,13 +562,13 @@ func (m *Mockconfigurator) Queue() string {
 }
 
 // Queue indicates an expected call of Queue.
-func (mr *MockconfiguratorMockRecorder) Queue() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Queue() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Queue", reflect.TypeOf((*Mockconfigurator)(nil).Queue))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Queue", reflect.TypeOf((*MockConfigurator)(nil).Queue))
 }
 
 // ReadTimeout mocks base method.
-func (m *Mockconfigurator) ReadTimeout() int {
+func (m *MockConfigurator) ReadTimeout() int {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadTimeout")
 	ret0, _ := ret[0].(int)
@@ -576,13 +576,13 @@ func (m *Mockconfigurator) ReadTimeout() int {
 }
 
 // ReadTimeout indicates an expected call of ReadTimeout.
-func (mr *MockconfiguratorMockRecorder) ReadTimeout() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) ReadTimeout() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadTimeout", reflect.TypeOf((*Mockconfigurator)(nil).ReadTimeout))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadTimeout", reflect.TypeOf((*MockConfigurator)(nil).ReadTimeout))
 }
 
 // RoutingKey mocks base method.
-func (m *Mockconfigurator) RoutingKey() string {
+func (m *MockConfigurator) RoutingKey() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RoutingKey")
 	ret0, _ := ret[0].(string)
@@ -590,13 +590,13 @@ func (m *Mockconfigurator) RoutingKey() string {
 }
 
 // RoutingKey indicates an expected call of RoutingKey.
-func (mr *MockconfiguratorMockRecorder) RoutingKey() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) RoutingKey() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoutingKey", reflect.TypeOf((*Mockconfigurator)(nil).RoutingKey))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoutingKey", reflect.TypeOf((*MockConfigurator)(nil).RoutingKey))
 }
 
 // Table mocks base method.
-func (m *Mockconfigurator) Table() string {
+func (m *MockConfigurator) Table() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Table")
 	ret0, _ := ret[0].(string)
@@ -604,13 +604,13 @@ func (m *Mockconfigurator) Table() string {
 }
 
 // Table indicates an expected call of Table.
-func (mr *MockconfiguratorMockRecorder) Table() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Table() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Table", reflect.TypeOf((*Mockconfigurator)(nil).Table))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Table", reflect.TypeOf((*MockConfigurator)(nil).Table))
 }
 
 // Type mocks base method.
-func (m *Mockconfigurator) Type() operation.StorageType {
+func (m *MockConfigurator) Type() operation.StorageType {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Type")
 	ret0, _ := ret[0].(operation.StorageType)
@@ -618,13 +618,13 @@ func (m *Mockconfigurator) Type() operation.StorageType {
 }
 
 // Type indicates an expected call of Type.
-func (mr *MockconfiguratorMockRecorder) Type() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) Type() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Type", reflect.TypeOf((*Mockconfigurator)(nil).Type))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Type", reflect.TypeOf((*MockConfigurator)(nil).Type))
 }
 
 // User mocks base method.
-func (m *Mockconfigurator) User() string {
+func (m *MockConfigurator) User() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "User")
 	ret0, _ := ret[0].(string)
@@ -632,7 +632,7 @@ func (m *Mockconfigurator) User() string {
 }
 
 // User indicates an expected call of User.
-func (mr *MockconfiguratorMockRecorder) User() *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) User() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "User", reflect.TypeOf((*Mockconfigurator)(nil).User))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "User", reflect.TypeOf((*MockConfigurator)(nil).User))
 }

@@ -8,8 +8,10 @@ import (
 	"db-worker/internal/service/worker"
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/mocks"
+	"db-worker/internal/storage/model"
 	"testing"
 
+	"db-worker/internal/storage/postgres/message"
 	postgres "db-worker/internal/storage/postgres/repo"
 
 	"github.com/golang/mock/gomock"
@@ -222,7 +224,13 @@ func TestInitOperation(t *testing.T) {
 		mockDriver,
 	}
 
+	driversMap := map[string]model.Configurator{
+		"test-storage": mockDriver,
+	}
+
 	mockDriver.EXPECT().Name().Return("test-storage").Times(1)
+
+	messageRepo := &message.Repo{}
 
 	uowService, err := uow.New(
 		uow.WithStorages(storages),
@@ -238,7 +246,7 @@ func TestInitOperation(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	srv := initOperation(cfg, connection, uowService)
+	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap)
 
 	require.NotNil(t, srv)
 }
@@ -296,10 +304,10 @@ func TestInitOperationServices(t *testing.T) {
 		"test-storage-4": mockStorage4,
 	}
 
-	mockStorage1.EXPECT().Name().Return("test-storage-1").Times(1)
-	mockStorage2.EXPECT().Name().Return("test-storage-2").Times(1)
-	mockStorage3.EXPECT().Name().Return("test-storage-3").Times(1)
-	mockStorage4.EXPECT().Name().Return("test-storage-4").Times(1)
+	mockStorage1.EXPECT().Name().Return("test-storage-1").AnyTimes()
+	mockStorage2.EXPECT().Name().Return("test-storage-2").AnyTimes()
+	mockStorage3.EXPECT().Name().Return("test-storage-3").AnyTimes()
+	mockStorage4.EXPECT().Name().Return("test-storage-4").AnyTimes()
 
 	opts := []postgres.RepoOption{
 		postgres.WithAddr("test-addr"),
@@ -319,7 +327,7 @@ func TestInitOperationServices(t *testing.T) {
 	repo, err := postgres.New(context.Background(), opts...)
 	require.NoError(t, err)
 
-	services, err := initOperationServices(cfg, connections, storagesMap, repo)
+	services, err := initOperationServices(cfg, connections, storagesMap, repo, nil)
 	require.NoError(t, err)
 	require.NotNil(t, services)
 

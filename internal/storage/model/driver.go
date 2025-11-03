@@ -9,7 +9,7 @@ import (
 //
 //go:generate mockgen -source=driver.go -destination=../mocks/driver_mock.go -package=mocks Driver
 type Driver interface {
-	configurator
+	Configurator
 	transactionEditor
 	runner
 }
@@ -28,7 +28,8 @@ type runner interface {
 	Stop(ctx context.Context) error
 }
 
-type configurator interface {
+// Configurator определяет интерфейс для работы с конфигурацией драйвера.
+type Configurator interface {
 	Type() operation.StorageType
 	Name() string
 	Table() string

@@ -11,6 +11,8 @@ import (
 	"db-worker/internal/service/worker"
 	"db-worker/internal/service/worker/rabbit"
 	"db-worker/internal/storage"
+	"db-worker/internal/storage/model"
+	"db-worker/internal/storage/postgres/message"
 	"db-worker/internal/storage/postgres/migration"
 	postgres "db-worker/internal/storage/postgres/repo"
 
@@ -94,7 +96,15 @@ func main() {
 	})
 	defer butler.stop(notifyCtx, txRepo)
 
-	operations, err := initOperationServices(cfg, connections, storagesMap, txRepo)
+	messageRepo := initMessageRepo(notifyCtx, cfg.Storage.Postgres)
+
+	go butler.start(func() error {
+		return messageRepo.Run(notifyCtx)
+	})
+
+	defer butler.stop(notifyCtx, messageRepo)
+
+	operations, err := initOperationServices(cfg, connections, storagesMap, txRepo, messageRepo)
 	if err != nil {
 		logrus.WithError(err).Fatalf("error initializing operation services")
 	}
@@ -245,6 +255,17 @@ func initPostgresStorage(ctx context.Context, cfg config.Postgres, name string, 
 	))
 }
 
+func initMessageRepo(ctx context.Context, cfg config.Postgres) *message.Repo {
+	return start(message.New(ctx,
+		message.WithAddr(formatPostgresAddr(cfg)),
+		message.WithInsertTimeout(cfg.InsertTimeout),
+		message.WithReadTimeout(cfg.ReadTimeout),
+		message.WithName("messages"),
+		message.WithCfg(&cfg),
+		message.WithTable("messages.messages"),
+	))
+}
+
 func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo {
 	return start(migration.New(ctx,
 		migration.WithAddr(formatPostgresAddr(cfg)),
@@ -252,7 +273,7 @@ func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo
 	))
 }
 
-func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver) (map[string]*operation_srv.Service, error) {
+func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver, messageRepo *message.Repo) (map[string]*operation_srv.Service, error) {
 	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
 	systemStorageConfigs := make([]operation.StorageCfg, 0, 2) // пока что только postgres (transactions.transactions и transactions.requests)
@@ -296,9 +317,18 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 			return nil, fmt.Errorf("error grouping storages: %w", err)
 		}
 
+		driversMap := make(map[string]model.Configurator, len(storages))
+		for _, storage := range storages {
+			if _, exists := driversMap[storage.Name()]; exists {
+				return nil, fmt.Errorf("duplicate storage name in operation %s: %s", operationCfg.Name, storage.Name())
+			}
+
+			driversMap[storage.Name()] = storage
+		}
+
 		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs)
 
-		op := initOperation(operationCfg, conn, uow)
+		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap)
 
 		operations[operationCfg.Name] = op
 	}
@@ -342,11 +372,13 @@ func initRedisStorage(ctx context.Context, cfg config.Redis) *redis.Service {
 	return redis
 }
 
-func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service) *operation_srv.Service {
+func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
 		operation_srv.WithMsgChan(connection.MsgChan()),
 		operation_srv.WithUow(uow),
+		operation_srv.WithMessageRepo(messageRepo),
+		operation_srv.WithDriversMap(driversMap),
 	))
 
 	return op
