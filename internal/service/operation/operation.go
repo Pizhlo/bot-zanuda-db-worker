@@ -3,21 +3,34 @@ package operation
 import (
 	"context"
 	"db-worker/internal/config/operation"
+	"db-worker/internal/service/operation/message"
 	"db-worker/internal/service/uow"
 	"db-worker/internal/storage"
+	"db-worker/internal/storage/model"
 	"errors"
+	"sync"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
 // Service - сервис для выполнения операций.
 type Service struct {
-	cfg *operation.Operation // конфигурация операции
+	cfg        *operation.Operation // конфигурация операции
+	instanceID int
+
+	mu sync.Mutex
 
 	uow unitOfWork
 
+	messageRepo messageRepo
+
 	msgChan  chan map[string]interface{}
 	quitChan chan struct{}
+
+	messages map[uuid.UUID]*message.Message
+
+	driversMap map[string]model.Configurator
 }
 
 // unitOfWork инкапсулирует логику работы с хранилищами. Берет на себя построение запросов и выполнение их.
@@ -27,6 +40,25 @@ type unitOfWork interface {
 	BuildRequests(msg map[string]interface{}, driversMap map[string]uow.DriversMap, operation operation.Operation) (map[storage.Driver]*storage.Request, error)
 	ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) error
 	StoragesMap() map[string]uow.DriversMap
+}
+
+type messageRepo interface {
+	messageCreator
+	messageUpdater
+	messageGetter
+}
+
+type messageCreator interface {
+	CreateMany(ctx context.Context, messages []message.Message) error
+}
+
+type messageUpdater interface {
+	UpdateMany(ctx context.Context, messages []message.Message) error
+}
+
+type messageGetter interface {
+	Get(ctx context.Context, id string) (message.Message, error)
+	GetAll(ctx context.Context) ([]message.Message, error)
 }
 
 // option определяет опции для сервиса.
@@ -53,9 +85,32 @@ func WithUow(uow unitOfWork) option {
 	}
 }
 
+// WithMessageRepo устанавливает репозиторий для работы с сообщениями.
+func WithMessageRepo(messageRepo messageRepo) option {
+	return func(s *Service) {
+		s.messageRepo = messageRepo
+	}
+}
+
+// WithInstanceID устанавливает id экземпляра приложения.
+func WithInstanceID(instanceID int) option {
+	return func(s *Service) {
+		s.instanceID = instanceID
+	}
+}
+
+// WithDriversMap устанавливает мапу с драйверами.
+func WithDriversMap(driversMap map[string]model.Configurator) option {
+	return func(s *Service) {
+		s.driversMap = driversMap
+	}
+}
+
 // New создает новый экземпляр сервиса.
 func New(opts ...option) (*Service, error) {
-	s := &Service{}
+	s := &Service{
+		messages: make(map[uuid.UUID]*message.Message),
+	}
 
 	for _, opt := range opts {
 		opt(s)
@@ -72,6 +127,16 @@ func New(opts ...option) (*Service, error) {
 	if s.uow == nil {
 		return nil, errors.New("uow is required")
 	}
+
+	if s.messageRepo == nil {
+		return nil, errors.New("message repo is required")
+	}
+
+	if len(s.driversMap) == 0 {
+		return nil, errors.New("drivers map is required")
+	}
+
+	// не проверяем instanceID, т.к. он может быть 0
 
 	s.quitChan = make(chan struct{})
 

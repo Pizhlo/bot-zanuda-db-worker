@@ -29,3 +29,21 @@ CREATE TABLE IF NOT EXISTS transactions.requests (
 CREATE INDEX IF NOT EXISTS requests_tx_id_idx ON transactions.requests(tx_id);
 
 ALTER TABLE public.schema_migrations ADD COLUMN IF NOT EXISTS created_at timestamp with time zone NOT NULL DEFAULT now();
+
+CREATE SCHEMA IF NOT EXISTS messages;
+
+-- типы статусов сообщений
+CREATE TYPE message_status AS ENUM ('IN_PROGRESS', 'VALIDATED','FAILED');
+
+-- таблица с сообщениями
+CREATE TABLE IF NOT EXISTS messages.messages (
+    id UUID PRIMARY KEY,
+    data JSONB NOT NULL,
+    status message_status NOT NULL,
+    error varchar,
+    driver_type varchar not null,
+    driver_name varchar not null,
+    instance_id integer,
+    operation_hash BYTEA NOT NULL,
+    created_at BIGINT NOT NULL DEFAULT extract(epoch from current_timestamp)::BIGINT
+);

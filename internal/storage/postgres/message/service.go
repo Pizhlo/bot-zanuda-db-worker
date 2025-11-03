@@ -1,4 +1,4 @@
-package postgres
+package message
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	_ "github.com/lib/pq" // postgres driver
 )
 
-// Repo сохраняет результаты выполнения транзакции в базу данных.
+// Repo сохраняет сообщения и результаты их обработки в базу данных.
 type Repo struct {
 	addr  string
 	db    *sql.DB
@@ -107,6 +107,10 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 		return nil, errors.New("config is required")
 	}
 
+	if r.table == "" {
+		return nil, errors.New("table is required")
+	}
+
 	db, err := sql.Open("postgres", r.addr)
 	if err != nil {
 		return nil, fmt.Errorf("connect open a db driver: %w", err)
@@ -115,6 +119,7 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	logger := logrus.New()
 	logger.Level = logrus.DebugLevel           // miminum level
 	logger.Formatter = &logrus.TextFormatter{} // logrus automatically add time field
+
 	drv := db.Driver()
 
 	if err := db.Close(); err != nil {
@@ -122,6 +127,7 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 	}
 
 	db = sqldblogger.OpenDriver(r.addr, drv, logrusadapter.New(logger) /*, using_default_options*/) // db is STILL *sql.DB
+
 	r.transaction = struct {
 		mu sync.Mutex
 		tx map[string]*sql.Tx
@@ -144,23 +150,12 @@ func (db *Repo) Run(ctx context.Context) error {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"addr": db.addr,
+		"host": db.cfg.Host,
+		"port": db.cfg.Port,
 		"name": db.name,
 	}).Info("successfully connected postgres")
 
 	return nil
-}
-
-func (db *Repo) getTx(id string) (*sql.Tx, error) {
-	db.transaction.mu.Lock()
-	defer db.transaction.mu.Unlock()
-
-	tx, ok := db.transaction.tx[id]
-	if !ok {
-		return nil, fmt.Errorf("transaction not found")
-	}
-
-	return tx, nil
 }
 
 // Name возвращает имя репозитория.

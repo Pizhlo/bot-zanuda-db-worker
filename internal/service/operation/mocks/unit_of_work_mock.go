@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	operation "db-worker/internal/config/operation"
+	message "db-worker/internal/service/operation/message"
 	uow "db-worker/internal/service/uow"
 	storage "db-worker/internal/storage"
 	reflect "reflect"
@@ -78,4 +79,212 @@ func (m *MockunitOfWork) StoragesMap() map[string]uow.DriversMap {
 func (mr *MockunitOfWorkMockRecorder) StoragesMap() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoragesMap", reflect.TypeOf((*MockunitOfWork)(nil).StoragesMap))
+}
+
+// MockmessageRepo is a mock of messageRepo interface.
+type MockmessageRepo struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageRepoMockRecorder
+}
+
+// MockmessageRepoMockRecorder is the mock recorder for MockmessageRepo.
+type MockmessageRepoMockRecorder struct {
+	mock *MockmessageRepo
+}
+
+// NewMockmessageRepo creates a new mock instance.
+func NewMockmessageRepo(ctrl *gomock.Controller) *MockmessageRepo {
+	mock := &MockmessageRepo{ctrl: ctrl}
+	mock.recorder = &MockmessageRepoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageRepo) EXPECT() *MockmessageRepoMockRecorder {
+	return m.recorder
+}
+
+// CreateMany mocks base method.
+func (m *MockmessageRepo) CreateMany(ctx context.Context, messages []message.Message) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateMany", ctx, messages)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateMany indicates an expected call of CreateMany.
+func (mr *MockmessageRepoMockRecorder) CreateMany(ctx, messages interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMany", reflect.TypeOf((*MockmessageRepo)(nil).CreateMany), ctx, messages)
+}
+
+// Get mocks base method.
+func (m *MockmessageRepo) Get(ctx context.Context, id string) (message.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, id)
+	ret0, _ := ret[0].(message.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockmessageRepoMockRecorder) Get(ctx, id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockmessageRepo)(nil).Get), ctx, id)
+}
+
+// GetAll mocks base method.
+func (m *MockmessageRepo) GetAll(ctx context.Context) ([]message.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAll", ctx)
+	ret0, _ := ret[0].([]message.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAll indicates an expected call of GetAll.
+func (mr *MockmessageRepoMockRecorder) GetAll(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAll", reflect.TypeOf((*MockmessageRepo)(nil).GetAll), ctx)
+}
+
+// UpdateMany mocks base method.
+func (m *MockmessageRepo) UpdateMany(ctx context.Context, messages []message.Message) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMany", ctx, messages)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateMany indicates an expected call of UpdateMany.
+func (mr *MockmessageRepoMockRecorder) UpdateMany(ctx, messages interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMany", reflect.TypeOf((*MockmessageRepo)(nil).UpdateMany), ctx, messages)
+}
+
+// MockmessageCreator is a mock of messageCreator interface.
+type MockmessageCreator struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageCreatorMockRecorder
+}
+
+// MockmessageCreatorMockRecorder is the mock recorder for MockmessageCreator.
+type MockmessageCreatorMockRecorder struct {
+	mock *MockmessageCreator
+}
+
+// NewMockmessageCreator creates a new mock instance.
+func NewMockmessageCreator(ctrl *gomock.Controller) *MockmessageCreator {
+	mock := &MockmessageCreator{ctrl: ctrl}
+	mock.recorder = &MockmessageCreatorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageCreator) EXPECT() *MockmessageCreatorMockRecorder {
+	return m.recorder
+}
+
+// CreateMany mocks base method.
+func (m *MockmessageCreator) CreateMany(ctx context.Context, messages []message.Message) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateMany", ctx, messages)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateMany indicates an expected call of CreateMany.
+func (mr *MockmessageCreatorMockRecorder) CreateMany(ctx, messages interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMany", reflect.TypeOf((*MockmessageCreator)(nil).CreateMany), ctx, messages)
+}
+
+// MockmessageUpdater is a mock of messageUpdater interface.
+type MockmessageUpdater struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageUpdaterMockRecorder
+}
+
+// MockmessageUpdaterMockRecorder is the mock recorder for MockmessageUpdater.
+type MockmessageUpdaterMockRecorder struct {
+	mock *MockmessageUpdater
+}
+
+// NewMockmessageUpdater creates a new mock instance.
+func NewMockmessageUpdater(ctrl *gomock.Controller) *MockmessageUpdater {
+	mock := &MockmessageUpdater{ctrl: ctrl}
+	mock.recorder = &MockmessageUpdaterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageUpdater) EXPECT() *MockmessageUpdaterMockRecorder {
+	return m.recorder
+}
+
+// UpdateMany mocks base method.
+func (m *MockmessageUpdater) UpdateMany(ctx context.Context, messages []message.Message) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMany", ctx, messages)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateMany indicates an expected call of UpdateMany.
+func (mr *MockmessageUpdaterMockRecorder) UpdateMany(ctx, messages interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMany", reflect.TypeOf((*MockmessageUpdater)(nil).UpdateMany), ctx, messages)
+}
+
+// MockmessageGetter is a mock of messageGetter interface.
+type MockmessageGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageGetterMockRecorder
+}
+
+// MockmessageGetterMockRecorder is the mock recorder for MockmessageGetter.
+type MockmessageGetterMockRecorder struct {
+	mock *MockmessageGetter
+}
+
+// NewMockmessageGetter creates a new mock instance.
+func NewMockmessageGetter(ctrl *gomock.Controller) *MockmessageGetter {
+	mock := &MockmessageGetter{ctrl: ctrl}
+	mock.recorder = &MockmessageGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageGetter) EXPECT() *MockmessageGetterMockRecorder {
+	return m.recorder
+}
+
+// Get mocks base method.
+func (m *MockmessageGetter) Get(ctx context.Context, id string) (message.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, id)
+	ret0, _ := ret[0].(message.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockmessageGetterMockRecorder) Get(ctx, id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockmessageGetter)(nil).Get), ctx, id)
+}
+
+// GetAll mocks base method.
+func (m *MockmessageGetter) GetAll(ctx context.Context) ([]message.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAll", ctx)
+	ret0, _ := ret[0].([]message.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAll indicates an expected call of GetAll.
+func (mr *MockmessageGetterMockRecorder) GetAll(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAll", reflect.TypeOf((*MockmessageGetter)(nil).GetAll), ctx)
 }
