@@ -118,7 +118,7 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 
 	logger := logrus.New()
 	logger.Level = logrus.DebugLevel           // miminum level
-	logger.Formatter = &logrus.JSONFormatter{} // logrus automatically add time field
+	logger.Formatter = &logrus.TextFormatter{} // logrus automatically add time field
 
 	drv := db.Driver()
 

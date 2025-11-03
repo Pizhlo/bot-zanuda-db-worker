@@ -114,10 +114,14 @@ func New(ctx context.Context, opts ...RepoOption) (*Repo, error) {
 
 	logger := logrus.New()
 	logger.Level = logrus.DebugLevel           // miminum level
-	logger.Formatter = &logrus.JSONFormatter{} // logrus automatically add time field
+	logger.Formatter = &logrus.TextFormatter{} // logrus automatically add time field
+	drv := db.Driver()
 
-	db = sqldblogger.OpenDriver(r.addr, db.Driver(), logrusadapter.New(logger) /*, using_default_options*/) // db is STILL *sql.DB
+	if err := db.Close(); err != nil {
+		return nil, fmt.Errorf("close raw db: %w", err)
+	}
 
+	db = sqldblogger.OpenDriver(r.addr, drv, logrusadapter.New(logger) /*, using_default_options*/) // db is STILL *sql.DB
 	r.transaction = struct {
 		mu sync.Mutex
 		tx map[string]*sql.Tx
