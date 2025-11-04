@@ -13,7 +13,7 @@ mocks:
 
 swag:
 	@echo "> generating swagger documentation..."
-	swag init --md ./docs --parseInternal  --parseDependency --parseDepth 2 
+	swag init -g cmd/app/main.go --md ./docs --parseInternal  --parseDependency --parseDepth 2 
 	@echo "> swagger documentation generated successfully"
 
 init:

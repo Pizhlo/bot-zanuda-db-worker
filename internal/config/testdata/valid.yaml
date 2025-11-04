@@ -2,6 +2,10 @@
 log_level: "debug"
 instance_id: 1
 
+server:
+  port: 8080
+  shutdown_timeout: 100ms
+
 storage:
   buffer_size: 100
 

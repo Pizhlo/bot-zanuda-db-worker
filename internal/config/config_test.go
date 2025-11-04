@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +28,10 @@ func TestLoadConfig(t *testing.T) {
 			want: &Config{
 				LogLevel:   "debug",
 				InstanceID: 1,
+				Server: Server{
+					Port:            8080,
+					ShutdownTimeout: 100 * time.Millisecond,
+				},
 				Storage: struct {
 					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
 					Postgres   Postgres "yaml:\"postgres\""
