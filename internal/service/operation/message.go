@@ -3,12 +3,14 @@ package operation
 import (
 	"context"
 	"db-worker/internal/service/operation/message"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
+//nolint:gocognit,funlen // цельная логика функции, много строк из-за логов
 func (s *Service) readMessages(ctx context.Context) {
 	logrus.WithFields(logrus.Fields{
 		"name":       s.cfg.Name,
@@ -56,11 +58,37 @@ func (s *Service) readMessages(ctx context.Context) {
 
 			s.addTotalMessages(len(ids))
 
-			if err := s.processMessage(ctx, msg, ids); err != nil {
+			if err := s.buffer.add(ids, msg); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{
 					"name":       s.cfg.Name,
 					"connection": s.cfg.Request.From,
-				}).Error("operation: error process message")
+				}).Error("operation: error add message to buffer")
+
+				continue
+			}
+
+			// не начинаем обработку, если буфер не заполнен и канал не пуст
+			if !s.buffer.isFull() && len(s.msgChan) > 0 {
+				logrus.WithFields(logrus.Fields{
+					"name":       s.cfg.Name,
+					"connection": s.cfg.Request.From,
+				}).Debug("operation: buffer is not full and message channel is not empty")
+
+				continue
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"name":       s.cfg.Name,
+				"connection": s.cfg.Request.From,
+				"count":      s.buffer.count(),
+				"ids":        ids,
+			}).Info("operation: buffer is full or message channel is empty. Processing messages...")
+
+			if err := s.processMessages(ctx); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"name":       s.cfg.Name,
+					"connection": s.cfg.Request.From,
+				}).Error("operation: error process messages")
 
 				continue
 			}
@@ -70,8 +98,22 @@ func (s *Service) readMessages(ctx context.Context) {
 				"message":    msg,
 				"connection": s.cfg.Request.From,
 			}).Info("operation: message processed")
+
+			s.buffer.clear()
 		}
 	}
+}
+
+func (s *Service) processMessages(ctx context.Context) error {
+	errs := make([]error, 0, s.buffer.count())
+
+	for _, item := range s.buffer.getAll() {
+		if err := s.processMessage(ctx, item.data, item.ids); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 // processMessage обрабатывает сообщение - валидирует, строит запросы и передает на выполнение в UOW.

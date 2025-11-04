@@ -390,7 +390,7 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 
 		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID)
 
-		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap, cfg.InstanceID, metricsService)
+		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap, cfg.InstanceID, metricsService, operationCfg.Buffer)
 
 		operations[operationCfg.Name] = op
 	}
@@ -435,7 +435,7 @@ func initRedisStorage(ctx context.Context, cfg config.Redis) *redis.Service {
 	return redis
 }
 
-func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator, instanceID int, metricsService *metrics.Service) *operation_srv.Service {
+func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator, instanceID int, metricsService *metrics.Service, bufferSize int) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
 		operation_srv.WithMsgChan(connection.MsgChan()),
@@ -444,6 +444,7 @@ func initOperation(operationCfg operation.Operation, connection worker.Worker, u
 		operation_srv.WithDriversMap(driversMap),
 		operation_srv.WithInstanceID(instanceID),
 		operation_srv.WithMetricsService(metricsService),
+		operation_srv.WithBuffer(bufferSize),
 	))
 
 	return op

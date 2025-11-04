@@ -38,10 +38,14 @@ func TestNew(t *testing.T) {
 					WithDriversMap(driversMap),
 					WithInstanceID(1),
 					WithMetricsService(metricsService),
+					WithBuffer(10),
 				}
 			},
 			createWant: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
+
+				buffer, err := newBuffer(10)
+				require.NoError(t, err)
 
 				return &Service{
 					cfg:            &operation.Operation{},
@@ -52,6 +56,7 @@ func TestNew(t *testing.T) {
 					driversMap:     driversMap,
 					instanceID:     1,
 					metricsService: metricsService,
+					buffer:         buffer,
 				}
 			},
 			wantErr: require.NoError,
@@ -64,9 +69,11 @@ func TestNew(t *testing.T) {
 				return []option{
 					WithMsgChan(msgChan),
 					WithUow(uow),
-					WithMsgChan(msgChan),
 					WithMessageRepo(messageRepo),
 					WithDriversMap(driversMap),
+					WithInstanceID(1),
+					WithMetricsService(metricsService),
+					WithBuffer(10),
 				}
 			},
 			wantErr: require.Error,
@@ -78,7 +85,12 @@ func TestNew(t *testing.T) {
 
 				return []option{
 					WithCfg(&operation.Operation{}),
+					WithUow(uow),
 					WithMessageRepo(messageRepo),
+					WithDriversMap(driversMap),
+					WithInstanceID(1),
+					WithMetricsService(metricsService),
+					WithBuffer(10),
 				}
 			},
 			wantErr: require.Error,
@@ -92,6 +104,10 @@ func TestNew(t *testing.T) {
 					WithCfg(&operation.Operation{}),
 					WithMsgChan(msgChan),
 					WithMessageRepo(messageRepo),
+					WithDriversMap(driversMap),
+					WithInstanceID(1),
+					WithMetricsService(metricsService),
+					WithBuffer(10),
 				}
 			},
 			wantErr: require.Error,
@@ -106,6 +122,9 @@ func TestNew(t *testing.T) {
 					WithMsgChan(msgChan),
 					WithUow(uow),
 					WithDriversMap(driversMap),
+					WithInstanceID(1),
+					WithMetricsService(metricsService),
+					WithBuffer(10),
 				}
 			},
 			wantErr: require.Error,
@@ -121,6 +140,8 @@ func TestNew(t *testing.T) {
 					WithUow(uow),
 					WithMessageRepo(messageRepo),
 					WithInstanceID(1),
+					WithMetricsService(metricsService),
+					WithBuffer(10),
 				}
 			},
 			wantErr: require.Error,
@@ -136,6 +157,26 @@ func TestNew(t *testing.T) {
 					WithUow(uow),
 					WithMessageRepo(messageRepo),
 					WithDriversMap(driversMap),
+					WithInstanceID(1),
+					WithBuffer(10),
+				}
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: buffer size is 0",
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
+				t.Helper()
+
+				return []option{
+					WithCfg(&operation.Operation{}),
+					WithMsgChan(msgChan),
+					WithUow(uow),
+					WithMessageRepo(messageRepo),
+					WithDriversMap(driversMap),
+					WithInstanceID(1),
+					WithMetricsService(metricsService),
+					WithBuffer(0),
 				}
 			},
 			wantErr: require.Error,

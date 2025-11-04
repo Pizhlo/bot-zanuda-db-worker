@@ -251,7 +251,7 @@ func TestInitOperation(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	metricsService := metrics.New(metrics.WithRegisterer(registry))
 
-	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1, metricsService)
+	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1, metricsService, 10)
 
 	require.NotNil(t, srv)
 }
@@ -272,7 +272,8 @@ func TestInitOperationServices(t *testing.T) {
 		Operations: operation.OperationConfig{
 			Operations: []operation.Operation{
 				{
-					Name: "test-operation-1",
+					Name:   "test-operation-1",
+					Buffer: 10,
 					Storages: []operation.StorageCfg{
 						{Name: "test-storage-1"},
 						{Name: "test-storage-2"},
@@ -281,7 +282,8 @@ func TestInitOperationServices(t *testing.T) {
 						From: "test-connection-1"},
 				},
 				{
-					Name: "test-operation-2",
+					Name:   "test-operation-2",
+					Buffer: 10,
 					Storages: []operation.StorageCfg{
 						{Name: "test-storage-3"},
 						{Name: "test-storage-4"},

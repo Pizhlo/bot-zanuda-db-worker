@@ -33,11 +33,9 @@ func TestLoadConfig(t *testing.T) {
 					ShutdownTimeout: 100 * time.Millisecond,
 				},
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    "yaml:\"redis\" validate:\"required\""
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    "yaml:\"redis\" validate:\"required\""
 				}{
-					BufferSize: 100,
 					Postgres: Postgres{
 						Host:          "localhost",
 						Port:          1111,
@@ -97,9 +95,8 @@ func TestValidateRedisConfig(t *testing.T) {
 			name: "valid config: single node",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type: RedisTypeSingle,
@@ -114,9 +111,8 @@ func TestValidateRedisConfig(t *testing.T) {
 			name: "valid config: cluster node",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type:  RedisTypeCluster,
@@ -130,9 +126,8 @@ func TestValidateRedisConfig(t *testing.T) {
 			name: "invalid config: single node with addrs",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type:  RedisTypeSingle,
@@ -148,9 +143,8 @@ func TestValidateRedisConfig(t *testing.T) {
 			name: "invalid config: single node without host and port",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type: RedisTypeSingle,
@@ -163,9 +157,8 @@ func TestValidateRedisConfig(t *testing.T) {
 			name: "invalid config: cluster node with host and port",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type:  RedisTypeCluster,
@@ -181,9 +174,8 @@ func TestValidateRedisConfig(t *testing.T) {
 			name: "invalid config: cluster node without addrs",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type: RedisTypeCluster,
@@ -217,9 +209,8 @@ func TestValidateRedisSingleConfig(t *testing.T) {
 			name: "valid config",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type: RedisTypeSingle,
@@ -234,9 +225,8 @@ func TestValidateRedisSingleConfig(t *testing.T) {
 			name: "invalid config: single node with addrs",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type:  RedisTypeSingle,
@@ -252,9 +242,8 @@ func TestValidateRedisSingleConfig(t *testing.T) {
 			name: "invalid config: single node without host and port",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type: RedisTypeSingle,
@@ -288,9 +277,8 @@ func TestValidateRedisClusterConfig(t *testing.T) {
 			name: "valid config",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type:  RedisTypeCluster,
@@ -304,9 +292,8 @@ func TestValidateRedisClusterConfig(t *testing.T) {
 			name: "invalid config: cluster node with host and port",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type:  RedisTypeCluster,
@@ -322,9 +309,8 @@ func TestValidateRedisClusterConfig(t *testing.T) {
 			name: "invalid config: cluster node without addrs",
 			cfg: &Config{
 				Storage: struct {
-					BufferSize int      "yaml:\"buffer_size\" validate:\"required,min=1\""
-					Postgres   Postgres "yaml:\"postgres\""
-					Redis      Redis    `yaml:"redis" validate:"required"`
+					Postgres Postgres "yaml:\"postgres\""
+					Redis    Redis    `yaml:"redis" validate:"required"`
 				}{
 					Redis: Redis{
 						Type: RedisTypeCluster,
