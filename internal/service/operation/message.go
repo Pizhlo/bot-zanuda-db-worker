@@ -54,6 +54,8 @@ func (s *Service) readMessages(ctx context.Context) {
 				continue
 			}
 
+			s.addTotalMessages(len(ids))
+
 			if err := s.processMessage(ctx, msg, ids); err != nil {
 				logrus.WithError(err).WithFields(logrus.Fields{
 					"name":       s.cfg.Name,
@@ -84,7 +86,10 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]any, ids []
 		"ids":        ids,
 	}).Info("operation: received message")
 
-	defer s.deleteMessagesFromMap(ids) // удаляем сообщения из мапы, т.к. они обработаны
+	defer func() {
+		s.deleteMessagesFromMap(ids) // удаляем сообщения из мапы, т.к. они обработаны
+		s.addProcessedMessages(len(ids))
+	}()
 
 	err := s.validateMessage(msg)
 	if err != nil {
@@ -97,6 +102,7 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]any, ids []
 
 		// обновляем статус сообщений в БД: failed
 		if err := s.updateMessagesStatus(ctx, message.StatusFailed, ids, err); err != nil {
+			s.addFailedMessages(len(ids))
 			return fmt.Errorf("error update messages: %w", err)
 		}
 
@@ -121,6 +127,7 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]any, ids []
 
 		// обновляем статус сообщений в БД: failed
 		if err := s.updateMessagesStatus(ctx, message.StatusFailed, ids, err); err != nil {
+			s.addFailedMessages(len(ids))
 			return fmt.Errorf("error update messages: %w", err)
 		}
 
@@ -129,6 +136,7 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]any, ids []
 
 	// обновляем статус сообщений в БД: validated
 	if err := s.updateMessagesStatus(ctx, message.StatusValidated, ids, nil); err != nil {
+		s.addFailedMessages(len(ids))
 		return fmt.Errorf("error update messages: %w", err)
 	}
 
@@ -176,6 +184,8 @@ func (s *Service) createMessages(ctx context.Context, msg map[string]any) ([]uui
 		return ids, fmt.Errorf("error create messages: %w", err)
 	}
 
+	s.addProcessingMessages(len(messages))
+
 	return ids, nil
 }
 
@@ -183,6 +193,8 @@ func (s *Service) createMessages(ctx context.Context, msg map[string]any) ([]uui
 // Принимает статус, список айдишников сообщений и ошибку.
 // Если статус failed, то ошибка не может быть nil.
 // Если статус не failed, то ошибка должна быть nil.
+// Также обновляет метрики в зависимости от статуса: при обновлении статуса на failed или success - отнимает количество сообщений из количества сообщений в процессе обработки.
+// При обновлении статуса на validated - добавляет количество сообщений в количество сообщений в статусе validated.
 func (s *Service) updateMessagesStatus(ctx context.Context, status message.Status, ids []uuid.UUID, errMsg error) error {
 	messages := make([]message.Message, 0, len(ids))
 
@@ -195,20 +207,24 @@ func (s *Service) updateMessagesStatus(ctx context.Context, status message.Statu
 	}
 
 	for _, id := range ids {
-		message, err := s.getMessageFromMap(id)
+		msg, err := s.getMessageFromMap(id)
 		if err != nil {
 			return fmt.Errorf("error get message from map: %w", err)
 		}
 
-		message.Status = status
+		originalStatus := msg.Status
+
+		msg.Status = status
 
 		if errMsg != nil {
-			message.Error = errMsg.Error()
+			msg.Error = errMsg.Error()
 		} else {
-			message.Error = ""
+			msg.Error = ""
 		}
 
-		messages = append(messages, *message)
+		messages = append(messages, *msg)
+
+		s.updateMetricsFromStatuses(originalStatus, status, 1)
 	}
 
 	err := s.messageRepo.UpdateMany(ctx, messages)
@@ -219,6 +235,29 @@ func (s *Service) updateMessagesStatus(ctx context.Context, status message.Statu
 	return nil
 }
 
+// updateMetricsFromStatuses обновляет метрики в зависимости от статуса:
+//   - in progress -> failed: увеличивает количество сообщений в статусе failed и уменьшает количество сообщений в процессе обработки.
+//   - in progress -> validated: увеличивает количество сообщений в статусе validated и уменьшает количество сообщений в процессе обработки.
+//   - failed -> validated: увеличивает количество сообщений в статусе validated и уменьшает количество сообщений в статусе failed.
+func (s *Service) updateMetricsFromStatuses(originalStatus, newStatus message.Status, count int) {
+	if originalStatus == newStatus {
+		return
+	}
+
+	if originalStatus == message.StatusInProgress && newStatus == message.StatusFailed {
+		s.addFailedMessages(count)
+	}
+
+	if originalStatus == message.StatusInProgress && newStatus == message.StatusValidated {
+		s.addValidatedMessages(count)
+	}
+
+	if originalStatus == message.StatusFailed && newStatus == message.StatusValidated {
+		s.fromFailedToValidated(count)
+	}
+}
+
+// deleteMessagesFromMap удаляет сообщения из мапы.
 func (s *Service) deleteMessagesFromMap(ids []uuid.UUID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -228,6 +267,7 @@ func (s *Service) deleteMessagesFromMap(ids []uuid.UUID) {
 	}
 }
 
+// addMessageToMap добавляет сообщение в мапу.
 func (s *Service) addMessageToMap(id uuid.UUID, message *message.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

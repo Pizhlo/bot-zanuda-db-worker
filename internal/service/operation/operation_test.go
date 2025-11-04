@@ -21,13 +21,13 @@ func TestNew(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		createOpts func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option
+		createOpts func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option
 		wantErr    require.ErrorAssertionFunc
-		createWant func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service
+		createWant func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service
 	}{
 		{
 			name: "positive case",
-			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option {
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -37,26 +37,28 @@ func TestNew(t *testing.T) {
 					WithMessageRepo(messageRepo),
 					WithDriversMap(driversMap),
 					WithInstanceID(1),
+					WithMetricsService(metricsService),
 				}
 			},
-			createWant: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createWant: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					cfg:         &operation.Operation{},
-					msgChan:     msgChan,
-					quitChan:    make(chan struct{}),
-					uow:         uow,
-					messageRepo: messageRepo,
-					driversMap:  driversMap,
-					instanceID:  1,
+					cfg:            &operation.Operation{},
+					msgChan:        msgChan,
+					quitChan:       make(chan struct{}),
+					uow:            uow,
+					messageRepo:    messageRepo,
+					driversMap:     driversMap,
+					instanceID:     1,
+					metricsService: metricsService,
 				}
 			},
 			wantErr: require.NoError,
 		},
 		{
 			name: "negative case: cfg is nil",
-			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option {
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -71,7 +73,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: message channel is nil",
-			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option {
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -83,7 +85,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: uow is nil",
-			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option {
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -96,7 +98,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: message repo is nil",
-			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option {
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -110,7 +112,7 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "negative case: drivers map is empty",
-			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) []option {
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -119,6 +121,21 @@ func TestNew(t *testing.T) {
 					WithUow(uow),
 					WithMessageRepo(messageRepo),
 					WithInstanceID(1),
+				}
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: metrics service is nil",
+			createOpts: func(t *testing.T, uow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) []option {
+				t.Helper()
+
+				return []option{
+					WithCfg(&operation.Operation{}),
+					WithMsgChan(msgChan),
+					WithUow(uow),
+					WithMessageRepo(messageRepo),
+					WithDriversMap(driversMap),
 				}
 			},
 			wantErr: require.Error,
@@ -138,16 +155,18 @@ func TestNew(t *testing.T) {
 			configurator1 := storagemocks.NewMockConfigurator(ctrl)
 			configurator2 := storagemocks.NewMockConfigurator(ctrl)
 
+			metricsService := mocks.NewMockmessageCounter(ctrl)
+
 			driversMap := map[string]model.Configurator{
 				"test-storage":   configurator1,
 				"test-storage-2": configurator2,
 			}
 
-			got, err := New(tt.createOpts(t, uow, messageRepo, driversMap)...)
+			got, err := New(tt.createOpts(t, uow, messageRepo, driversMap, metricsService)...)
 			tt.wantErr(t, err)
 
 			if tt.createWant != nil {
-				want := tt.createWant(t, uow, messageRepo, driversMap)
+				want := tt.createWant(t, uow, messageRepo, driversMap, metricsService)
 				// Сравниваем поля по отдельности, исключая каналы
 				assert.Equal(t, want.cfg, got.cfg)
 				assert.Equal(t, want.msgChan, got.msgChan)

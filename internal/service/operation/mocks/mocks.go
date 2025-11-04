@@ -288,3 +288,240 @@ func (mr *MockmessageGetterMockRecorder) GetAll(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAll", reflect.TypeOf((*MockmessageGetter)(nil).GetAll), ctx)
 }
+
+// MockmessageCounter is a mock of messageCounter interface.
+type MockmessageCounter struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageCounterMockRecorder
+}
+
+// MockmessageCounterMockRecorder is the mock recorder for MockmessageCounter.
+type MockmessageCounterMockRecorder struct {
+	mock *MockmessageCounter
+}
+
+// NewMockmessageCounter creates a new mock instance.
+func NewMockmessageCounter(ctrl *gomock.Controller) *MockmessageCounter {
+	mock := &MockmessageCounter{ctrl: ctrl}
+	mock.recorder = &MockmessageCounterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageCounter) EXPECT() *MockmessageCounterMockRecorder {
+	return m.recorder
+}
+
+// AddFailedMessages mocks base method.
+func (m *MockmessageCounter) AddFailedMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddFailedMessages", count)
+}
+
+// AddFailedMessages indicates an expected call of AddFailedMessages.
+func (mr *MockmessageCounterMockRecorder) AddFailedMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFailedMessages", reflect.TypeOf((*MockmessageCounter)(nil).AddFailedMessages), count)
+}
+
+// AddProcessedMessages mocks base method.
+func (m *MockmessageCounter) AddProcessedMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddProcessedMessages", count)
+}
+
+// AddProcessedMessages indicates an expected call of AddProcessedMessages.
+func (mr *MockmessageCounterMockRecorder) AddProcessedMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProcessedMessages", reflect.TypeOf((*MockmessageCounter)(nil).AddProcessedMessages), count)
+}
+
+// AddProcessingMessages mocks base method.
+func (m *MockmessageCounter) AddProcessingMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddProcessingMessages", count)
+}
+
+// AddProcessingMessages indicates an expected call of AddProcessingMessages.
+func (mr *MockmessageCounterMockRecorder) AddProcessingMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProcessingMessages", reflect.TypeOf((*MockmessageCounter)(nil).AddProcessingMessages), count)
+}
+
+// AddTotalMessages mocks base method.
+func (m *MockmessageCounter) AddTotalMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddTotalMessages", count)
+}
+
+// AddTotalMessages indicates an expected call of AddTotalMessages.
+func (mr *MockmessageCounterMockRecorder) AddTotalMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTotalMessages", reflect.TypeOf((*MockmessageCounter)(nil).AddTotalMessages), count)
+}
+
+// AddValidatedMessages mocks base method.
+func (m *MockmessageCounter) AddValidatedMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddValidatedMessages", count)
+}
+
+// AddValidatedMessages indicates an expected call of AddValidatedMessages.
+func (mr *MockmessageCounterMockRecorder) AddValidatedMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddValidatedMessages", reflect.TypeOf((*MockmessageCounter)(nil).AddValidatedMessages), count)
+}
+
+// DecrementFailedMessagesBy mocks base method.
+func (m *MockmessageCounter) DecrementFailedMessagesBy(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementFailedMessagesBy", count)
+}
+
+// DecrementFailedMessagesBy indicates an expected call of DecrementFailedMessagesBy.
+func (mr *MockmessageCounterMockRecorder) DecrementFailedMessagesBy(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementFailedMessagesBy", reflect.TypeOf((*MockmessageCounter)(nil).DecrementFailedMessagesBy), count)
+}
+
+// DecrementProcessingMessagesBy mocks base method.
+func (m *MockmessageCounter) DecrementProcessingMessagesBy(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementProcessingMessagesBy", count)
+}
+
+// DecrementProcessingMessagesBy indicates an expected call of DecrementProcessingMessagesBy.
+func (mr *MockmessageCounterMockRecorder) DecrementProcessingMessagesBy(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementProcessingMessagesBy", reflect.TypeOf((*MockmessageCounter)(nil).DecrementProcessingMessagesBy), count)
+}
+
+// MockmessageAdder is a mock of messageAdder interface.
+type MockmessageAdder struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageAdderMockRecorder
+}
+
+// MockmessageAdderMockRecorder is the mock recorder for MockmessageAdder.
+type MockmessageAdderMockRecorder struct {
+	mock *MockmessageAdder
+}
+
+// NewMockmessageAdder creates a new mock instance.
+func NewMockmessageAdder(ctrl *gomock.Controller) *MockmessageAdder {
+	mock := &MockmessageAdder{ctrl: ctrl}
+	mock.recorder = &MockmessageAdderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageAdder) EXPECT() *MockmessageAdderMockRecorder {
+	return m.recorder
+}
+
+// AddFailedMessages mocks base method.
+func (m *MockmessageAdder) AddFailedMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddFailedMessages", count)
+}
+
+// AddFailedMessages indicates an expected call of AddFailedMessages.
+func (mr *MockmessageAdderMockRecorder) AddFailedMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFailedMessages", reflect.TypeOf((*MockmessageAdder)(nil).AddFailedMessages), count)
+}
+
+// AddProcessedMessages mocks base method.
+func (m *MockmessageAdder) AddProcessedMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddProcessedMessages", count)
+}
+
+// AddProcessedMessages indicates an expected call of AddProcessedMessages.
+func (mr *MockmessageAdderMockRecorder) AddProcessedMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProcessedMessages", reflect.TypeOf((*MockmessageAdder)(nil).AddProcessedMessages), count)
+}
+
+// AddProcessingMessages mocks base method.
+func (m *MockmessageAdder) AddProcessingMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddProcessingMessages", count)
+}
+
+// AddProcessingMessages indicates an expected call of AddProcessingMessages.
+func (mr *MockmessageAdderMockRecorder) AddProcessingMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProcessingMessages", reflect.TypeOf((*MockmessageAdder)(nil).AddProcessingMessages), count)
+}
+
+// AddTotalMessages mocks base method.
+func (m *MockmessageAdder) AddTotalMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddTotalMessages", count)
+}
+
+// AddTotalMessages indicates an expected call of AddTotalMessages.
+func (mr *MockmessageAdderMockRecorder) AddTotalMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTotalMessages", reflect.TypeOf((*MockmessageAdder)(nil).AddTotalMessages), count)
+}
+
+// AddValidatedMessages mocks base method.
+func (m *MockmessageAdder) AddValidatedMessages(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddValidatedMessages", count)
+}
+
+// AddValidatedMessages indicates an expected call of AddValidatedMessages.
+func (mr *MockmessageAdderMockRecorder) AddValidatedMessages(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddValidatedMessages", reflect.TypeOf((*MockmessageAdder)(nil).AddValidatedMessages), count)
+}
+
+// MockmessageDecrementer is a mock of messageDecrementer interface.
+type MockmessageDecrementer struct {
+	ctrl     *gomock.Controller
+	recorder *MockmessageDecrementerMockRecorder
+}
+
+// MockmessageDecrementerMockRecorder is the mock recorder for MockmessageDecrementer.
+type MockmessageDecrementerMockRecorder struct {
+	mock *MockmessageDecrementer
+}
+
+// NewMockmessageDecrementer creates a new mock instance.
+func NewMockmessageDecrementer(ctrl *gomock.Controller) *MockmessageDecrementer {
+	mock := &MockmessageDecrementer{ctrl: ctrl}
+	mock.recorder = &MockmessageDecrementerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmessageDecrementer) EXPECT() *MockmessageDecrementerMockRecorder {
+	return m.recorder
+}
+
+// DecrementFailedMessagesBy mocks base method.
+func (m *MockmessageDecrementer) DecrementFailedMessagesBy(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementFailedMessagesBy", count)
+}
+
+// DecrementFailedMessagesBy indicates an expected call of DecrementFailedMessagesBy.
+func (mr *MockmessageDecrementerMockRecorder) DecrementFailedMessagesBy(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementFailedMessagesBy", reflect.TypeOf((*MockmessageDecrementer)(nil).DecrementFailedMessagesBy), count)
+}
+
+// DecrementProcessingMessagesBy mocks base method.
+func (m *MockmessageDecrementer) DecrementProcessingMessagesBy(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementProcessingMessagesBy", count)
+}
+
+// DecrementProcessingMessagesBy indicates an expected call of DecrementProcessingMessagesBy.
+func (mr *MockmessageDecrementerMockRecorder) DecrementProcessingMessagesBy(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementProcessingMessagesBy", reflect.TypeOf((*MockmessageDecrementer)(nil).DecrementProcessingMessagesBy), count)
+}
