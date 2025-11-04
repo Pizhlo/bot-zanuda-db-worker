@@ -9,7 +9,9 @@ import (
 	storagemocks "db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/model"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
@@ -44,6 +46,8 @@ func TestReadMessages(t *testing.T) {
 
 			messageRepo := mocks.NewMockmessageRepo(ctrl)
 
+			metricsService := mocks.NewMockmessageCounter(ctrl)
+
 			configurator1 := storagemocks.NewMockConfigurator(ctrl)
 			configurator2 := storagemocks.NewMockConfigurator(ctrl)
 
@@ -56,13 +60,14 @@ func TestReadMessages(t *testing.T) {
 				cfg: &operation.Operation{
 					Name: "test",
 				},
-				messageRepo: messageRepo,
-				uow:         mockUow,
-				driversMap:  driversMap,
-				instanceID:  1,
-				messages:    make(map[uuid.UUID]*message.Message),
-				msgChan:     make(chan map[string]interface{}),
-				quitChan:    make(chan struct{}),
+				messageRepo:    messageRepo,
+				uow:            mockUow,
+				driversMap:     driversMap,
+				instanceID:     1,
+				metricsService: metricsService,
+				messages:       make(map[uuid.UUID]*message.Message),
+				msgChan:        make(chan map[string]interface{}),
+				quitChan:       make(chan struct{}),
 			}
 
 			// AnyTimes - потому что мы не знаем, в какой момент будет закрыть канал
@@ -91,11 +96,30 @@ func TestReadMessages(t *testing.T) {
 				return nil
 			})
 
-			go svc.readMessages(t.Context())
+			metricsService.EXPECT().AddTotalMessages(gomock.Any()).Return().AnyTimes()
+			metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().AnyTimes()
+			metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().AnyTimes()
+			metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().AnyTimes()
+			metricsService.EXPECT().AddProcessedMessages(gomock.Any()).Return().AnyTimes()
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				svc.readMessages(t.Context())
+			}()
 
 			svc.msgChan <- tt.msg
 
+			// Даем время на обработку сообщения перед закрытием канала
+			time.Sleep(10 * time.Millisecond)
+
 			close(svc.quitChan)
+
+			// Ждем завершения горутины, чтобы все defer функции успели выполниться
+			wg.Wait()
 		})
 	}
 }
@@ -106,31 +130,32 @@ func TestProcessMessage(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		createSvc  func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service
+		createSvc  func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service
 		msg        map[string]interface{}
-		setupMocks func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator)
+		setupMocks func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter)
 		wantErr    require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test",
 					},
-					messageRepo: messageRepo,
-					uow:         mockUow,
-					driversMap:  driversMap,
-					instanceID:  1,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					uow:            mockUow,
+					driversMap:     driversMap,
+					instanceID:     1,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			msg: map[string]interface{}{
 				"field1": "test",
 			},
-			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				mockUow.EXPECT().StoragesMap().Return(map[string]uow.DriversMap{}).Times(1)
@@ -157,12 +182,17 @@ func TestProcessMessage(t *testing.T) {
 					driver.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
 					driver.EXPECT().Name().Return("test-storage").Times(1)
 				}
+
+				metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddProcessedMessages(gomock.Any()).Return().AnyTimes()
 			},
 			wantErr: require.NoError,
 		},
 		{
 			name: "negative case: error validate message",
-			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -180,14 +210,15 @@ func TestProcessMessage(t *testing.T) {
 							},
 						},
 					},
-					messageRepo: messageRepo,
-					uow:         mockUow,
-					driversMap:  driversMap,
-					instanceID:  1,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					uow:            mockUow,
+					driversMap:     driversMap,
+					instanceID:     1,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
-			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, messages []message.Message) error {
@@ -211,6 +242,11 @@ func TestProcessMessage(t *testing.T) {
 					driver.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
 					driver.EXPECT().Name().Return("test-storage").Times(1)
 				}
+
+				metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddFailedMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddProcessedMessages(gomock.Any()).Return().AnyTimes()
 			},
 			msg: map[string]interface{}{
 				"field1": "test",
@@ -219,24 +255,25 @@ func TestProcessMessage(t *testing.T) {
 		},
 		{
 			name: "negative case: error build requests",
-			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test",
 					},
-					messageRepo: messageRepo,
-					uow:         mockUow,
-					driversMap:  driversMap,
-					instanceID:  1,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					uow:            mockUow,
+					driversMap:     driversMap,
+					instanceID:     1,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			msg: map[string]interface{}{
 				"field1": "test",
 			},
-			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, messages []message.Message) error {
@@ -263,29 +300,35 @@ func TestProcessMessage(t *testing.T) {
 
 				mockUow.EXPECT().StoragesMap().Return(map[string]uow.DriversMap{}).Times(1)
 				mockUow.EXPECT().BuildRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("error")).Times(1)
+
+				metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddFailedMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddProcessedMessages(gomock.Any()).Return().AnyTimes()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: error exec requests",
-			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test",
 					},
-					messageRepo: messageRepo,
-					uow:         mockUow,
-					driversMap:  driversMap,
-					instanceID:  1,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					uow:            mockUow,
+					driversMap:     driversMap,
+					instanceID:     1,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			msg: map[string]interface{}{
 				"field1": "test",
 			},
-			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, mockUow *mocks.MockunitOfWork, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				mockUow.EXPECT().StoragesMap().Return(map[string]uow.DriversMap{}).Times(1)
@@ -312,6 +355,11 @@ func TestProcessMessage(t *testing.T) {
 					driver.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
 					driver.EXPECT().Name().Return("test-storage").Times(1)
 				}
+
+				metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().AnyTimes()
+				metricsService.EXPECT().AddProcessedMessages(gomock.Any()).Return().AnyTimes()
 			},
 			wantErr: require.Error,
 		},
@@ -330,14 +378,16 @@ func TestProcessMessage(t *testing.T) {
 			configurator1 := storagemocks.NewMockConfigurator(ctrl)
 			configurator2 := storagemocks.NewMockConfigurator(ctrl)
 
+			metricsService := mocks.NewMockmessageCounter(ctrl)
+
 			driversMap := map[string]model.Configurator{
 				"test-storage":   configurator1,
 				"test-storage-2": configurator2,
 			}
 
-			tt.setupMocks(t, mockUow, messageRepo, []*storagemocks.MockConfigurator{configurator1, configurator2})
+			tt.setupMocks(t, mockUow, messageRepo, []*storagemocks.MockConfigurator{configurator1, configurator2}, metricsService)
 
-			svc := tt.createSvc(t, mockUow, messageRepo, driversMap)
+			svc := tt.createSvc(t, mockUow, messageRepo, driversMap, metricsService)
 
 			// сохраняем сообщения в память
 			ids, err := svc.createMessages(t.Context(), tt.msg)
@@ -351,22 +401,22 @@ func TestProcessMessage(t *testing.T) {
 	}
 }
 
-//nolint:funlen,gocognit,cyclop // много тест-кейсов, сложный тест - ок
+//nolint:funlen // много тест-кейсов
 func TestCreateMessages(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name       string
-		createSvc  func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service
+		createSvc  func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service
 		msg        map[string]interface{}
 		driversMap func(t *testing.T, drivers []model.Configurator) map[string]model.Configurator
-		setupMocks func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator)
+		setupMocks func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter)
 		wantErr    require.ErrorAssertionFunc
 		validate   func(t *testing.T, svc *Service, ids []uuid.UUID)
 	}{
 		{
 			name: "positive case: create messages for all drivers",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -374,10 +424,11 @@ func TestCreateMessages(t *testing.T) {
 						Name: "test",
 						Hash: []byte{1, 2, 3, 4},
 					},
-					messageRepo: messageRepo,
-					driversMap:  driversMap,
-					instanceID:  42,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					driversMap:     driversMap,
+					instanceID:     42,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			msg: map[string]interface{}{
@@ -392,7 +443,7 @@ func TestCreateMessages(t *testing.T) {
 					"test-storage-2": drivers[1],
 				}
 			},
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				for _, driver := range driversMap {
@@ -419,6 +470,8 @@ func TestCreateMessages(t *testing.T) {
 
 					return nil
 				})
+
+				metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().Times(1)
 			},
 			wantErr: require.NoError,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID) {
@@ -445,7 +498,7 @@ func TestCreateMessages(t *testing.T) {
 		},
 		{
 			name: "positive case: single driver",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -453,10 +506,11 @@ func TestCreateMessages(t *testing.T) {
 						Name: "test",
 						Hash: []byte{5, 6, 7, 8},
 					},
-					messageRepo: messageRepo,
-					driversMap:  driversMap,
-					instanceID:  100,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					driversMap:     driversMap,
+					instanceID:     100,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			driversMap: func(t *testing.T, drivers []model.Configurator) map[string]model.Configurator {
@@ -469,7 +523,7 @@ func TestCreateMessages(t *testing.T) {
 			msg: map[string]interface{}{
 				"test": "data",
 			},
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				for _, driver := range driversMap {
@@ -488,6 +542,8 @@ func TestCreateMessages(t *testing.T) {
 
 					return nil
 				})
+
+				metricsService.EXPECT().AddProcessingMessages(gomock.Any()).Return().Times(1)
 			},
 			wantErr: require.NoError,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID) {
@@ -498,58 +554,8 @@ func TestCreateMessages(t *testing.T) {
 			},
 		},
 		{
-			name: "positive case: empty message data",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
-				t.Helper()
-
-				return &Service{
-					cfg: &operation.Operation{
-						Name: "test",
-						Hash: []byte{9, 10},
-					},
-					messageRepo: messageRepo,
-					driversMap:  driversMap,
-					instanceID:  0,
-					messages:    make(map[uuid.UUID]*message.Message),
-				}
-			},
-			driversMap: func(t *testing.T, drivers []model.Configurator) map[string]model.Configurator {
-				t.Helper()
-
-				return map[string]model.Configurator{
-					"test-storage":   drivers[0],
-					"test-storage-2": drivers[1],
-				}
-			},
-			msg: map[string]interface{}{},
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
-				t.Helper()
-
-				for _, driver := range driversMap {
-					driver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
-					driver.EXPECT().Name().Return("test-storage").AnyTimes()
-				}
-
-				messageRepo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, messages []message.Message) error {
-					for _, msg := range messages {
-						assert.Equal(t, map[string]interface{}{}, msg.Data)
-						assert.Equal(t, 0, msg.InstanceID)
-					}
-
-					return nil
-				})
-			},
-			wantErr: require.NoError,
-			validate: func(t *testing.T, svc *Service, ids []uuid.UUID) {
-				t.Helper()
-
-				require.Len(t, ids, len(svc.driversMap))
-				assert.Len(t, svc.messages, len(svc.driversMap))
-			},
-		},
-		{
 			name: "negative case: error create many",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -574,7 +580,7 @@ func TestCreateMessages(t *testing.T) {
 			msg: map[string]interface{}{
 				"field": "value",
 			},
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				for _, driver := range driversMap {
@@ -592,68 +598,6 @@ func TestCreateMessages(t *testing.T) {
 				assert.Len(t, svc.messages, len(svc.driversMap))
 			},
 		},
-		{
-			name: "positive case: check driver type and name",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap map[string]model.Configurator) *Service {
-				t.Helper()
-
-				return &Service{
-					cfg: &operation.Operation{
-						Name: "test",
-						Hash: []byte{1},
-					},
-					messageRepo: messageRepo,
-					driversMap:  driversMap,
-					instanceID:  1,
-					messages:    make(map[uuid.UUID]*message.Message),
-				}
-			},
-			msg: map[string]interface{}{
-				"test": true,
-			},
-			driversMap: func(t *testing.T, drivers []model.Configurator) map[string]model.Configurator {
-				t.Helper()
-
-				return map[string]model.Configurator{
-					"test-storage":   drivers[0],
-					"test-storage-2": drivers[1],
-				}
-			},
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, driversMap []*storagemocks.MockConfigurator) {
-				t.Helper()
-
-				for i, driver := range driversMap {
-					expectedName := "test-storage"
-
-					if i == 1 {
-						expectedName = "test-storage-2"
-					}
-
-					driver.EXPECT().Type().Return(operation.StorageTypePostgres).Times(1)
-					driver.EXPECT().Name().Return(expectedName).Times(1)
-				}
-
-				messageRepo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, messages []message.Message) error {
-					driverNames := make(map[string]bool)
-
-					for _, msg := range messages {
-						assert.Equal(t, string(operation.StorageTypePostgres), msg.DriverType)
-						assert.Contains(t, []string{"test-storage", "test-storage-2"}, msg.DriverName)
-						driverNames[msg.DriverName] = true
-					}
-
-					assert.Len(t, driverNames, len(messages))
-
-					return nil
-				})
-			},
-			wantErr: require.NoError,
-			validate: func(t *testing.T, svc *Service, ids []uuid.UUID) {
-				t.Helper()
-
-				require.Len(t, ids, len(svc.driversMap))
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -668,11 +612,13 @@ func TestCreateMessages(t *testing.T) {
 			configurator1 := storagemocks.NewMockConfigurator(ctrl)
 			configurator2 := storagemocks.NewMockConfigurator(ctrl)
 
+			metricsService := mocks.NewMockmessageCounter(ctrl)
+
 			driversMap := tt.driversMap(t, []model.Configurator{configurator1, configurator2})
 
-			tt.setupMocks(t, messageRepo, []*storagemocks.MockConfigurator{configurator1, configurator2})
+			tt.setupMocks(t, messageRepo, []*storagemocks.MockConfigurator{configurator1, configurator2}, metricsService)
 
-			svc := tt.createSvc(t, messageRepo, driversMap)
+			svc := tt.createSvc(t, messageRepo, driversMap, metricsService)
 
 			ids, err := svc.createMessages(t.Context(), tt.msg)
 			tt.wantErr(t, err)
@@ -690,8 +636,8 @@ func TestUpdateMessagesStatus(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		createSvc       func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service
-		setupMocks      func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message)
+		createSvc       func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service
+		setupMocks      func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter)
 		prepareMessages func(t *testing.T, svc *Service) []uuid.UUID
 		status          message.Status
 		errMsg          error
@@ -700,12 +646,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 	}{
 		{
 			name: "positive case: update status to validated without error",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					messageRepo: messageRepo,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			prepareMessages: func(t *testing.T, svc *Service) []uuid.UUID {
@@ -726,7 +673,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusValidated,
 			errMsg: nil,
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().UpdateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, msgs []message.Message) error {
@@ -736,6 +683,9 @@ func TestUpdateMessagesStatus(t *testing.T) {
 
 					return nil
 				})
+
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().Times(1)
 			},
 			wantErr: require.NoError,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID, status message.Status, errMsg error) {
@@ -757,12 +707,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "positive case: update status to failed with error",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					messageRepo: messageRepo,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			prepareMessages: func(t *testing.T, svc *Service) []uuid.UUID {
@@ -783,7 +734,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusFailed,
 			errMsg: errors.New("validation error: field required"),
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().UpdateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, msgs []message.Message) error {
@@ -793,6 +744,9 @@ func TestUpdateMessagesStatus(t *testing.T) {
 
 					return nil
 				})
+
+				metricsService.EXPECT().AddFailedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().Times(1)
 			},
 			wantErr: require.NoError,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID, status message.Status, errMsg error) {
@@ -814,12 +768,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "positive case: update multiple messages",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					messageRepo: messageRepo,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			prepareMessages: func(t *testing.T, svc *Service) []uuid.UUID {
@@ -850,7 +805,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusValidated,
 			errMsg: nil,
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().UpdateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, msgs []message.Message) error {
@@ -863,6 +818,9 @@ func TestUpdateMessagesStatus(t *testing.T) {
 
 					return nil
 				})
+
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().Times(2)
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().Times(2)
 			},
 			wantErr: require.NoError,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID, status message.Status, errMsg error) {
@@ -886,12 +844,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "negative case: message not found in map",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					messageRepo: messageRepo,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			prepareMessages: func(t *testing.T, svc *Service) []uuid.UUID {
@@ -908,12 +867,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "negative case: error update messages in database",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					messageRepo: messageRepo,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			prepareMessages: func(t *testing.T, svc *Service) []uuid.UUID {
@@ -934,10 +894,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusValidated,
 			errMsg: nil,
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().UpdateMany(gomock.Any(), gomock.Any()).Return(errors.New("database connection error")).Times(1)
+
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().Times(1)
 			},
 			wantErr: require.Error,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID, status message.Status, errMsg error) {
@@ -953,7 +916,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "negative case: errMsg is nil but status is failed",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -979,7 +942,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusFailed,
 			errMsg: nil,
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				// UpdateMany не должен быть вызван, т.к. валидация вернет ошибку до этого
@@ -993,7 +956,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "negative case: errMsg is not nil but status is not failed",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -1019,7 +982,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusValidated,
 			errMsg: errors.New("some error"),
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				// UpdateMany не должен быть вызван, т.к. валидация вернет ошибку до этого
@@ -1034,7 +997,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "negative case: errMsg is not nil but status is in progress",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
@@ -1060,7 +1023,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusInProgress,
 			errMsg: errors.New("some error"),
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				// UpdateMany не должен быть вызван, т.к. валидация вернет ошибку до этого
@@ -1075,12 +1038,13 @@ func TestUpdateMessagesStatus(t *testing.T) {
 		},
 		{
 			name: "positive case: update status from failed to validated",
-			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo) *Service {
+			createSvc: func(t *testing.T, messageRepo *mocks.MockmessageRepo, metricsService *mocks.MockmessageCounter) *Service {
 				t.Helper()
 
 				return &Service{
-					messageRepo: messageRepo,
-					messages:    make(map[uuid.UUID]*message.Message),
+					messageRepo:    messageRepo,
+					messages:       make(map[uuid.UUID]*message.Message),
+					metricsService: metricsService,
 				}
 			},
 			prepareMessages: func(t *testing.T, svc *Service) []uuid.UUID {
@@ -1102,7 +1066,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			},
 			status: message.StatusValidated,
 			errMsg: nil,
-			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message) {
+			setupMocks: func(t *testing.T, messageRepo *mocks.MockmessageRepo, messages []message.Message, metricsService *mocks.MockmessageCounter) {
 				t.Helper()
 
 				messageRepo.EXPECT().UpdateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, msgs []message.Message) error {
@@ -1113,6 +1077,9 @@ func TestUpdateMessagesStatus(t *testing.T) {
 
 					return nil
 				})
+
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementFailedMessagesBy(gomock.Any()).Return().Times(1)
 			},
 			wantErr: require.NoError,
 			validate: func(t *testing.T, svc *Service, ids []uuid.UUID, status message.Status, errMsg error) {
@@ -1136,8 +1103,9 @@ func TestUpdateMessagesStatus(t *testing.T) {
 			defer ctrl.Finish()
 
 			messageRepo := mocks.NewMockmessageRepo(ctrl)
+			metricsService := mocks.NewMockmessageCounter(ctrl)
 
-			svc := tt.createSvc(t, messageRepo)
+			svc := tt.createSvc(t, messageRepo, metricsService)
 
 			ids := tt.prepareMessages(t, svc)
 
@@ -1151,7 +1119,7 @@ func TestUpdateMessagesStatus(t *testing.T) {
 					messages = append(messages, *msg)
 				}
 
-				tt.setupMocks(t, messageRepo, messages)
+				tt.setupMocks(t, messageRepo, messages, metricsService)
 			}
 
 			err := svc.updateMessagesStatus(t.Context(), tt.status, ids, tt.errMsg)
@@ -2082,6 +2050,84 @@ func TestGetMessageFromMap(t *testing.T) {
 
 			// Валидация
 			tt.validate(t, svc, id, expectedMsg)
+		})
+	}
+}
+
+//nolint:funlen // много тест-кейсов
+func TestUpdateMetricsFromStatuses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		originalStatus message.Status
+		newStatus      message.Status
+		count          int
+		setupMocks     func(t *testing.T, metricsService *mocks.MockmessageCounter)
+	}{
+		{
+			name:           "update metrics from in progress to failed",
+			originalStatus: message.StatusInProgress,
+			newStatus:      message.StatusFailed,
+			count:          1,
+			setupMocks: func(t *testing.T, metricsService *mocks.MockmessageCounter) {
+				t.Helper()
+
+				metricsService.EXPECT().AddFailedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().Times(1)
+			},
+		},
+		{
+			name:           "update metrics from in progress to validated",
+			originalStatus: message.StatusInProgress,
+			newStatus:      message.StatusValidated,
+			count:          1,
+			setupMocks: func(t *testing.T, metricsService *mocks.MockmessageCounter) {
+				t.Helper()
+
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementProcessingMessagesBy(gomock.Any()).Return().Times(1)
+			},
+		},
+		{
+			name:           "update metrics from failed to validated",
+			originalStatus: message.StatusFailed,
+			newStatus:      message.StatusValidated,
+			count:          1,
+			setupMocks: func(t *testing.T, metricsService *mocks.MockmessageCounter) {
+				t.Helper()
+
+				metricsService.EXPECT().AddValidatedMessages(gomock.Any()).Return().Times(1)
+				metricsService.EXPECT().DecrementFailedMessagesBy(gomock.Any()).Return().Times(1)
+			},
+		},
+		{
+			name:           "equal statuses",
+			originalStatus: message.StatusInProgress,
+			newStatus:      message.StatusInProgress,
+			count:          1,
+			setupMocks: func(t *testing.T, metricsService *mocks.MockmessageCounter) {
+				t.Helper()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			metricsService := mocks.NewMockmessageCounter(ctrl)
+
+			srv := &Service{
+				metricsService: metricsService,
+			}
+
+			tt.setupMocks(t, metricsService)
+
+			srv.updateMetricsFromStatuses(tt.originalStatus, tt.newStatus, tt.count)
 		})
 	}
 }

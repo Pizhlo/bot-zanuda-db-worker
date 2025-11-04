@@ -6,6 +6,7 @@ import (
 	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
 	"db-worker/internal/server"
+	"db-worker/internal/service/metrics"
 	migration_srv "db-worker/internal/service/migration"
 	operation_srv "db-worker/internal/service/operation"
 	"db-worker/internal/service/redis"
@@ -114,7 +115,9 @@ func main() {
 
 	defer butler.stop(notifyCtx, messageRepo)
 
-	operations, err := initOperationServices(cfg, connections, storagesMap, txRepo, messageRepo)
+	metricsService := initMetricsService()
+
+	operations, err := initOperationServices(cfg, connections, storagesMap, txRepo, messageRepo, metricsService)
 	if err != nil {
 		logrus.WithError(err).Fatalf("error initializing operation services")
 	}
@@ -211,6 +214,15 @@ func initServer(handlerV0 *handlerV0.Handler, cfg config.Server) *server.Server 
 			server.WithPort(cfg.Port),
 			server.WithShutdownTimeout(cfg.ShutdownTimeout),
 		),
+	)
+}
+
+func initMetricsService() *metrics.Service {
+	return start(
+		metrics.New(
+			metrics.WithNamespace("dbworker"),
+			metrics.WithSubsystem("core"),
+		), nil,
 	)
 }
 
@@ -323,7 +335,7 @@ func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo
 	))
 }
 
-func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver, messageRepo *message.Repo) (map[string]*operation_srv.Service, error) {
+func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver, messageRepo *message.Repo, metricsService *metrics.Service) (map[string]*operation_srv.Service, error) {
 	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
 	systemStorageConfigs := make([]operation.StorageCfg, 0, 2) // пока что только postgres (transactions.transactions и transactions.requests)
@@ -378,7 +390,7 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 
 		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID)
 
-		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap, cfg.InstanceID)
+		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap, cfg.InstanceID, metricsService)
 
 		operations[operationCfg.Name] = op
 	}
@@ -423,7 +435,7 @@ func initRedisStorage(ctx context.Context, cfg config.Redis) *redis.Service {
 	return redis
 }
 
-func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator, instanceID int) *operation_srv.Service {
+func initOperation(operationCfg operation.Operation, connection worker.Worker, uow *uow.Service, messageRepo *message.Repo, driversMap map[string]model.Configurator, instanceID int, metricsService *metrics.Service) *operation_srv.Service {
 	op := start(operation_srv.New(
 		operation_srv.WithCfg(&operationCfg),
 		operation_srv.WithMsgChan(connection.MsgChan()),
@@ -431,6 +443,7 @@ func initOperation(operationCfg operation.Operation, connection worker.Worker, u
 		operation_srv.WithMessageRepo(messageRepo),
 		operation_srv.WithDriversMap(driversMap),
 		operation_srv.WithInstanceID(instanceID),
+		operation_srv.WithMetricsService(metricsService),
 	))
 
 	return op

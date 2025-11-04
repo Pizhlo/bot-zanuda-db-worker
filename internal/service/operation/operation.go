@@ -23,7 +23,8 @@ type Service struct {
 
 	uow unitOfWork
 
-	messageRepo messageRepo
+	messageRepo    messageRepo    // репозиторий для работы с сообщениями
+	metricsService messageCounter // сервис для работы с метриками
 
 	msgChan  chan map[string]interface{}
 	quitChan chan struct{}
@@ -35,7 +36,7 @@ type Service struct {
 
 // unitOfWork инкапсулирует логику работы с хранилищами. Берет на себя построение запросов и выполнение их.
 //
-//go:generate mockgen -source=operation.go -destination=mocks/unit_of_work_mock.go -package=mocks unitOfWork
+//go:generate mockgen -source=operation.go -destination=mocks/mocks.go -package=mocks
 type unitOfWork interface {
 	BuildRequests(msg map[string]interface{}, driversMap map[string]uow.DriversMap, operation operation.Operation) (map[storage.Driver]*storage.Request, error)
 	ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) error
@@ -59,6 +60,31 @@ type messageUpdater interface {
 type messageGetter interface {
 	Get(ctx context.Context, id string) (message.Message, error)
 	GetAll(ctx context.Context) ([]message.Message, error)
+}
+
+type messageCounter interface {
+	messageAdder
+	messageDecrementer
+}
+
+type messageAdder interface {
+	// AddProcessingMessages добавляет количество сообщений в статусе in progress.
+	AddProcessingMessages(count int)
+	// AddFailedMessages добавляет количество сообщений в статусе failed.
+	AddFailedMessages(count int)
+	// AddValidatedMessages добавляет количество сообщений в статусе validated.
+	AddValidatedMessages(count int)
+	// AddTotalMessages добавляет общее количество сообщений (обработанные + не обработанные).
+	AddTotalMessages(count int)
+	// AddProcessedMessages добавляет количество обработанных сообщений.
+	AddProcessedMessages(count int)
+}
+
+type messageDecrementer interface {
+	// DecrementProcessingMessagesBy уменьшает количество сообщений в процессе обработки на count.
+	DecrementProcessingMessagesBy(count int)
+	// DecrementFailedMessagesBy уменьшает количество сообщений в статусе failed на count.
+	DecrementFailedMessagesBy(count int)
 }
 
 // option определяет опции для сервиса.
@@ -106,6 +132,13 @@ func WithDriversMap(driversMap map[string]model.Configurator) option {
 	}
 }
 
+// WithMetricsService устанавливает сервис для работы с метриками.
+func WithMetricsService(metricsService messageCounter) option {
+	return func(s *Service) {
+		s.metricsService = metricsService
+	}
+}
+
 // New создает новый экземпляр сервиса.
 func New(opts ...option) (*Service, error) {
 	s := &Service{
@@ -134,6 +167,10 @@ func New(opts ...option) (*Service, error) {
 
 	if len(s.driversMap) == 0 {
 		return nil, errors.New("drivers map is required")
+	}
+
+	if s.metricsService == nil {
+		return nil, errors.New("metrics service is required")
 	}
 
 	// не проверяем instanceID, т.к. он может быть 0

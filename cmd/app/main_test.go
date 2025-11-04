@@ -4,6 +4,7 @@ import (
 	"context"
 	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
+	"db-worker/internal/service/metrics"
 	"db-worker/internal/service/uow"
 	"db-worker/internal/service/worker"
 	"db-worker/internal/storage"
@@ -15,6 +16,7 @@ import (
 	postgres "db-worker/internal/storage/postgres/repo"
 
 	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -246,7 +248,10 @@ func TestInitOperation(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1)
+	registry := prometheus.NewRegistry()
+	metricsService := metrics.New(metrics.WithRegisterer(registry))
+
+	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1, metricsService)
 
 	require.NotNil(t, srv)
 }
@@ -327,7 +332,11 @@ func TestInitOperationServices(t *testing.T) {
 	repo, err := postgres.New(context.Background(), opts...)
 	require.NoError(t, err)
 
-	services, err := initOperationServices(cfg, connections, storagesMap, repo, nil)
+	metricsService := metrics.New(
+		metrics.WithRegisterer(prometheus.NewRegistry()),
+	)
+
+	services, err := initOperationServices(cfg, connections, storagesMap, repo, nil, metricsService)
 	require.NoError(t, err)
 	require.NotNil(t, services)
 

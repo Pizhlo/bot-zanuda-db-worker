@@ -4,13 +4,11 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-
-	customRegistry := prometheus.NewRegistry()
 
 	tests := []struct {
 		name string
@@ -19,9 +17,10 @@ func TestNew(t *testing.T) {
 	}{
 		{
 			name: "positive case: default options",
-			opts: []Option{},
+			opts: []Option{
+				WithRegisterer(prometheus.NewRegistry()),
+			},
 			want: &Service{
-				registry:  prometheus.DefaultRegisterer,
 				namespace: "dbworker",
 				subsystem: "core",
 			},
@@ -29,12 +28,11 @@ func TestNew(t *testing.T) {
 		{
 			name: "positive case: custom options",
 			opts: []Option{
-				WithRegisterer(customRegistry),
+				WithRegisterer(prometheus.NewRegistry()),
 				WithNamespace("test"),
 				WithSubsystem("test"),
 			},
 			want: &Service{
-				registry:  customRegistry,
 				namespace: "test",
 				subsystem: "test",
 			},
@@ -46,7 +44,10 @@ func TestNew(t *testing.T) {
 			t.Parallel()
 
 			got := New(tt.opts...)
-			require.Equal(t, tt.want, got)
+
+			assert.Equal(t, tt.want.namespace, got.namespace)
+			assert.Equal(t, tt.want.subsystem, got.subsystem)
+			assert.NotNil(t, got.registry)
 		})
 	}
 }
