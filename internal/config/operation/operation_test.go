@@ -26,6 +26,7 @@ func TestLoadOperation(t *testing.T) {
 						Name:    "create_notes",
 						Timeout: 10000,
 						Type:    OperationTypeCreate,
+						Buffer:  10,
 						Storages: []StorageCfg{
 							{
 								Name:  "postgres_notes",
@@ -67,6 +68,7 @@ func TestLoadOperation(t *testing.T) {
 						Name:    "update_users",
 						Type:    OperationTypeUpdate,
 						Timeout: 500,
+						Buffer:  10,
 						Storages: []StorageCfg{
 							{
 								Name:  "postgres_users",

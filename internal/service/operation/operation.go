@@ -8,6 +8,7 @@ import (
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/model"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -18,6 +19,9 @@ import (
 type Service struct {
 	cfg        *operation.Operation // конфигурация операции
 	instanceID int
+
+	buffer     *buffer
+	bufferSize int
 
 	mu sync.Mutex
 
@@ -139,6 +143,13 @@ func WithMetricsService(metricsService messageCounter) option {
 	}
 }
 
+// WithBuffer устанавливает размер буфера.
+func WithBuffer(bufferSize int) option {
+	return func(s *Service) {
+		s.bufferSize = bufferSize
+	}
+}
+
 // New создает новый экземпляр сервиса.
 func New(opts ...option) (*Service, error) {
 	s := &Service{
@@ -151,6 +162,10 @@ func New(opts ...option) (*Service, error) {
 
 	if s.cfg == nil {
 		return nil, errors.New("cfg is required")
+	}
+
+	if s.bufferSize == 0 {
+		return nil, errors.New("buffer size is required")
 	}
 
 	if s.msgChan == nil {
@@ -174,6 +189,13 @@ func New(opts ...option) (*Service, error) {
 	}
 
 	// не проверяем instanceID, т.к. он может быть 0
+
+	var err error
+
+	s.buffer, err = newBuffer(s.bufferSize)
+	if err != nil {
+		return nil, fmt.Errorf("error creating buffer: %w", err)
+	}
 
 	s.quitChan = make(chan struct{})
 

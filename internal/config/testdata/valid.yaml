@@ -7,8 +7,6 @@ server:
   shutdown_timeout: 100ms
 
 storage:
-  buffer_size: 100
-
   postgres:
     host: "localhost"
     port: 1111

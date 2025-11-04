@@ -53,9 +53,8 @@ type Config struct {
 	Server Server `yaml:"server" validate:"required"`
 
 	Storage struct {
-		BufferSize int      `yaml:"buffer_size" validate:"required,min=1"`
-		Postgres   Postgres `yaml:"postgres"`
-		Redis      Redis    `yaml:"redis" validate:"required"`
+		Postgres Postgres `yaml:"postgres"`
+		Redis    Redis    `yaml:"redis" validate:"required"`
 	} `yaml:"storage"`
 
 	Operations operation.OperationConfig `validate:"-"` // валидируется в LoadOperationConfig

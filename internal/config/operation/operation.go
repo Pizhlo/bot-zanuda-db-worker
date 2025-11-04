@@ -39,6 +39,7 @@ type OperationConfig struct {
 // Operation - операция, которая будет выполнена над моделью.
 type Operation struct {
 	Name     string       `yaml:"name" validate:"required"`
+	Buffer   int          `yaml:"buffer" validate:"required,min=1"`  // размер буфера для операций
 	Timeout  int          `yaml:"timeout" validate:"required,min=1"` // время ожидания операции в миллисекундах
 	Type     Type         `yaml:"type" validate:"required,oneof=create update delete"`
 	Storages []StorageCfg `yaml:"storage" validate:"required,dive"` // куда сохранять модели. если несколько - будет сохраняться транзакцией

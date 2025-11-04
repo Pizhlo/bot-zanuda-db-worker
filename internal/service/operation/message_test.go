@@ -56,6 +56,9 @@ func TestReadMessages(t *testing.T) {
 				"test-storage-2": configurator2,
 			}
 
+			buffer, err := newBuffer(10)
+			require.NoError(t, err)
+
 			svc := &Service{
 				cfg: &operation.Operation{
 					Name: "test",
@@ -68,6 +71,7 @@ func TestReadMessages(t *testing.T) {
 				messages:       make(map[uuid.UUID]*message.Message),
 				msgChan:        make(chan map[string]interface{}),
 				quitChan:       make(chan struct{}),
+				buffer:         buffer,
 			}
 
 			// AnyTimes - потому что мы не знаем, в какой момент будет закрыть канал
