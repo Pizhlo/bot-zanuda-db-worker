@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v2"
@@ -49,6 +50,8 @@ type Config struct {
 	LogLevel   string `yaml:"log_level" validate:"required,oneof=debug info warn error"`
 	InstanceID int    `yaml:"instance_id" validate:"required,min=1"`
 
+	Server Server `yaml:"server" validate:"required"`
+
 	Storage struct {
 		BufferSize int      `yaml:"buffer_size" validate:"required,min=1"`
 		Postgres   Postgres `yaml:"postgres"`
@@ -56,6 +59,12 @@ type Config struct {
 	} `yaml:"storage"`
 
 	Operations operation.OperationConfig `validate:"-"` // валидируется в LoadOperationConfig
+}
+
+// Server - конфигурация сервера.
+type Server struct {
+	Port            int           `yaml:"port" validate:"required,min=1024,max=65535"`
+	ShutdownTimeout time.Duration `yaml:"shutdown_timeout" validate:"required,min=1ms"`
 }
 
 // LoadConfig загружает конфигурацию.

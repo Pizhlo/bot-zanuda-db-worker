@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	handlerV0 "db-worker/internal/api/v0"
 	"db-worker/internal/config"
 	"db-worker/internal/config/operation"
+	"db-worker/internal/server"
 	migration_srv "db-worker/internal/service/migration"
 	operation_srv "db-worker/internal/service/operation"
 	"db-worker/internal/service/redis"
@@ -23,7 +25,15 @@ import (
 	"syscall"
 
 	"github.com/sirupsen/logrus"
+
+	_ "db-worker/docs" // swagger docs
 )
+
+// @title           DB Worker API
+// @version         1.0
+// @description     API для работы с базой данных
+// @host            localhost:8080
+// @basePath        /api/v0
 
 //nolint:funlen // запуск всех сервисов.
 func main() {
@@ -138,6 +148,15 @@ func main() {
 	redis := initRedisStorage(notifyCtx, cfg.Storage.Redis)
 	defer butler.stop(notifyCtx, redis)
 
+	handlerV0 := initHandlerV0(butler.BuildInfo)
+	server := initServer(handlerV0, cfg.Server)
+
+	go butler.start(func() error {
+		return server.Start(notifyCtx)
+	})
+
+	// сервер сам закроется при завершении контекста
+
 	logrus.Info("all services started")
 
 	// Ждем сигнал завершения
@@ -162,6 +181,37 @@ func initWorkers(cfg *config.Config) (map[string]worker.Worker, error) {
 	}
 
 	return connections, nil
+}
+
+func initHandlerV0(buildInfo *BuildInfo) *handlerV0.Handler {
+	logrus.WithFields(logrus.Fields{
+		"version":   buildInfo.Version,
+		"buildDate": buildInfo.BuildDate,
+		"gitCommit": buildInfo.GitCommit,
+	}).Info("initializing handler v0")
+
+	return start(
+		handlerV0.New(
+			handlerV0.WithVersion(buildInfo.Version),
+			handlerV0.WithBuildDate(buildInfo.BuildDate),
+			handlerV0.WithGitCommit(buildInfo.GitCommit),
+		),
+	)
+}
+
+func initServer(handlerV0 *handlerV0.Handler, cfg config.Server) *server.Server {
+	logrus.WithFields(logrus.Fields{
+		"port":            cfg.Port,
+		"shutdownTimeout": cfg.ShutdownTimeout,
+	}).Info("initializing server")
+
+	return start(
+		server.New(
+			server.WithHandlerV0(handlerV0),
+			server.WithPort(cfg.Port),
+			server.WithShutdownTimeout(cfg.ShutdownTimeout),
+		),
+	)
 }
 
 func initWorker(worker operation.Connection) (worker.Worker, error) {
