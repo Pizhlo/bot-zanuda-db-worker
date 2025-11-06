@@ -742,10 +742,13 @@ func TestBuilderByStorageType(t *testing.T) {
 func TestSetOperationType(t *testing.T) {
 	t.Parallel()
 
+	createBuilder := builder_pkg.ForPostgres().WithCreateOperation()
+
 	updatedBuilder, err := builder_pkg.ForPostgres().WithUpdateOperation()
 	require.NoError(t, err)
 
-	postgresBuilder := builder_pkg.ForPostgres()
+	deletedBuilder, err := builder_pkg.ForPostgres().WithDeleteOperation()
+	require.NoError(t, err)
 
 	tests := []struct {
 		name          string
@@ -757,21 +760,28 @@ func TestSetOperationType(t *testing.T) {
 		{
 			name:          "positive case: create",
 			operationType: operation.OperationTypeCreate,
-			builder:       postgresBuilder,
-			want:          postgresBuilder.WithCreateOperation(),
+			builder:       builder_pkg.ForPostgres(),
+			want:          createBuilder,
 			wantErr:       require.NoError,
 		},
 		{
 			name:          "positive case: update",
 			operationType: operation.OperationTypeUpdate,
-			builder:       updatedBuilder,
+			builder:       builder_pkg.ForPostgres(),
 			want:          updatedBuilder,
+			wantErr:       require.NoError,
+		},
+		{
+			name:          "positive case: delete",
+			operationType: operation.OperationTypeDelete,
+			builder:       builder_pkg.ForPostgres(),
+			want:          deletedBuilder,
 			wantErr:       require.NoError,
 		},
 		{
 			name:          "negative case: unknown operation type",
 			operationType: "unknown",
-			builder:       postgresBuilder,
+			builder:       builder_pkg.ForPostgres(),
 			want:          nil,
 			wantErr:       require.Error,
 		},

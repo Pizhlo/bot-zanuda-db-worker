@@ -43,4 +43,6 @@ type operations interface {
 	WithCreateOperation() Builder
 	// WithUpdateOperation устанавливает операцию обновления.
 	WithUpdateOperation() (Builder, error)
+	// WithDeleteOperation устанавливает операцию удаления.
+	WithDeleteOperation() (Builder, error)
 }

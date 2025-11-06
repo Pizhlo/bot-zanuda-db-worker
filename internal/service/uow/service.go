@@ -196,6 +196,8 @@ func setOperationType(builder builder_pkg.Builder, operationType operation.Type)
 		return builder.WithCreateOperation(), nil
 	case operation.OperationTypeUpdate:
 		return builder.WithUpdateOperation()
+	case operation.OperationTypeDelete:
+		return builder.WithDeleteOperation()
 	default:
 		return nil, fmt.Errorf("unknown operation type: %s", operationType)
 	}
