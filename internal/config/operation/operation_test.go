@@ -1060,31 +1060,6 @@ func TestCalculateHash(t *testing.T) {
 			},
 			wantErr: require.NoError,
 		},
-		{
-			name: "successful hash calculation for delete_all operation",
-			operation: Operation{
-				Name:    "delete_all_notes",
-				Timeout: 2000,
-				Type:    OperationTypeDeleteAll,
-				Storages: []StorageCfg{
-					{
-						Name:  "postgres_notes",
-						Table: "notes.notes",
-					},
-				},
-				Fields: []Field{
-					{
-						Name:     "user_id",
-						Type:     FieldTypeInt64,
-						Required: true,
-					},
-				},
-				Request: Request{
-					From: "rabbit_notes_delete_all",
-				},
-			},
-			wantErr: require.NoError,
-		},
 	}
 
 	for _, tt := range tests {

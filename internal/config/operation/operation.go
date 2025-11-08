@@ -20,8 +20,6 @@ const (
 	OperationTypeUpdate Type = "update"
 	// OperationTypeDelete - удаление.
 	OperationTypeDelete Type = "delete"
-	// OperationTypeDeleteAll - удаление всех.
-	OperationTypeDeleteAll Type = "delete_all"
 )
 
 // OperationConfig - конфигурация операций, которые будут выполнены над моделью.
@@ -217,9 +215,17 @@ func LoadOperation(path string) (OperationConfig, error) {
 		}
 
 		for _, where := range operation.Where {
-			err = operation.validateWhereFieldUpdate(where)
-			if err != nil {
-				return OperationConfig{}, fmt.Errorf("operation %q: error validating update fields: %w", operation.Name, err)
+			switch operation.Type {
+			case OperationTypeUpdate:
+				err = operation.validateWhereFieldUpdate(where)
+				if err != nil {
+					return OperationConfig{}, fmt.Errorf("operation %q: error validating update fields: %w", operation.Name, err)
+				}
+			case OperationTypeDelete:
+				// err = operation.validateWhereFieldDelete(where)
+				// if err != nil {
+				// 	return OperationConfig{}, fmt.Errorf("operation %q: error validating delete fields: %w", operation.Name, err)
+				// }
 			}
 		}
 

@@ -76,6 +76,20 @@ func (b *postgresBuilder) WithUpdateOperation() (Builder, error) {
 	return b, nil
 }
 
+func (b *postgresBuilder) WithDeleteOperation() (Builder, error) {
+	b.builder = &deletePostgresBuilder{
+		basePostgresBuilder: basePostgresBuilder{
+			table: b.table,
+			args:  b.args,
+		},
+
+		where:          b.operation.Where,
+		whereFieldsMap: b.operation.WhereFieldsMap,
+	}
+
+	return b, nil
+}
+
 func (b *postgresBuilder) Build() (*storage.Request, error) {
 	if b.builder == nil {
 		return nil, errors.New("builder is nil")
@@ -170,7 +184,7 @@ func (b *updatePostgresBuilder) build() (*storage.Request, error) {
 		return nil, errors.New("args is nil")
 	}
 
-	wb := newWhereBuilder().withWhere(b.where).withWhereFieldsMap(b.whereFieldsMap).withUpdateFieldsMap(b.updateFieldsMap).withTable(b.table).withValues(b.args)
+	wb := newWhereUpdateBuilder().withWhere(b.where).withWhereFieldsMap(b.whereFieldsMap).withUpdateFieldsMap(b.updateFieldsMap).withTable(b.table).withValues(b.args)
 
 	sql, args, err := wb.build()
 	if err != nil {
@@ -184,8 +198,8 @@ func (b *updatePostgresBuilder) build() (*storage.Request, error) {
 	}, nil
 }
 
-// whereBuilder - строитель запросов для where операций в PostgreSQL.
-type whereBuilder struct {
+// whereUpdateBuilder - строитель запросов для where update операций в PostgreSQL.
+type whereUpdateBuilder struct {
 	ub              *sqlbuilder.UpdateBuilder
 	table           string
 	whereFieldsMap  map[string]operation.WhereField
@@ -194,41 +208,41 @@ type whereBuilder struct {
 	args            map[string]any
 }
 
-func newWhereBuilder() *whereBuilder {
-	return &whereBuilder{}
+func newWhereUpdateBuilder() *whereUpdateBuilder {
+	return &whereUpdateBuilder{}
 }
 
-func (b *whereBuilder) withWhere(where []operation.Where) *whereBuilder {
+func (b *whereUpdateBuilder) withWhere(where []operation.Where) *whereUpdateBuilder {
 	b.where = where
 
 	return b
 }
 
-func (b *whereBuilder) withUpdateFieldsMap(updateFieldsMap map[string]operation.Field) *whereBuilder {
+func (b *whereUpdateBuilder) withUpdateFieldsMap(updateFieldsMap map[string]operation.Field) *whereUpdateBuilder {
 	b.updateFieldsMap = updateFieldsMap
 
 	return b
 }
 
-func (b *whereBuilder) withWhereFieldsMap(whereFieldsMap map[string]operation.WhereField) *whereBuilder {
+func (b *whereUpdateBuilder) withWhereFieldsMap(whereFieldsMap map[string]operation.WhereField) *whereUpdateBuilder {
 	b.whereFieldsMap = whereFieldsMap
 
 	return b
 }
 
-func (b *whereBuilder) withTable(table string) *whereBuilder {
+func (b *whereUpdateBuilder) withTable(table string) *whereUpdateBuilder {
 	b.table = table
 
 	return b
 }
 
-func (b *whereBuilder) withValues(args map[string]any) *whereBuilder {
+func (b *whereUpdateBuilder) withValues(args map[string]any) *whereUpdateBuilder {
 	b.args = args
 
 	return b
 }
 
-func (b *whereBuilder) initUpdateBuilder() error {
+func (b *whereUpdateBuilder) initUpdateBuilder() error {
 	if b.table == "" {
 		return errors.New("table is nil")
 	}
@@ -245,7 +259,7 @@ func (b *whereBuilder) initUpdateBuilder() error {
 	return nil
 }
 
-func (b *whereBuilder) applyAssignments() error {
+func (b *whereUpdateBuilder) applyAssignments() error {
 	assignments := make([]string, 0, len(b.args))
 	for name := range b.updateFieldsMap {
 		value, ok := b.args[name]
@@ -267,7 +281,7 @@ func (b *whereBuilder) applyAssignments() error {
 	return nil
 }
 
-func (b *whereBuilder) build() (string, []any, error) {
+func (b *whereUpdateBuilder) build() (string, []any, error) {
 	if err := b.initUpdateBuilder(); err != nil {
 		return "", nil, err
 	}
@@ -286,14 +300,15 @@ func (b *whereBuilder) build() (string, []any, error) {
 	return sql, args, nil
 }
 
-func (b *whereBuilder) applyWhere() error {
+//nolint:dupl // одинаковая реализация, но внутри разные типы билдеров
+func (b *whereUpdateBuilder) applyWhere() error {
 	if len(b.where) == 0 {
 		return nil
 	}
 
 	groupExprs := make([]string, 0, len(b.where))
 	for _, w := range b.where {
-		expr, err := b.buildWhereExpr(w)
+		expr, err := buildWhereExpr(w, b.ub, b.args)
 		if err != nil {
 			return err
 		}
@@ -316,47 +331,23 @@ func (b *whereBuilder) applyWhere() error {
 	}
 }
 
-func (b *whereBuilder) buildWhereExpr(w operation.Where) (string, error) {
-	parts := make([]string, 0, len(w.Fields)+len(w.Conditions))
-	for _, f := range w.Fields {
-		expr, err := b.buildComparator(f)
-		if err != nil {
-			return "", err
-		}
-
-		parts = append(parts, expr)
-	}
-
-	for _, c := range w.Conditions {
-		expr, err := b.buildWhereExpr(c)
-		if err != nil {
-			return "", err
-		}
-
-		if expr != "" {
-			parts = append(parts, expr)
-		}
-	}
-
-	if len(parts) == 0 {
-		return "", fmt.Errorf("parts is nil")
-	}
-
-	switch w.Type {
-	case operation.WhereTypeOr:
-		return b.ub.Or(parts...), nil
-	case operation.WhereTypeNot:
-		return b.ub.Not(b.ub.And(parts...)), nil
-	default:
-		if len(parts) == 1 {
-			return parts[0], nil
-		}
-
-		return b.ub.And(parts...), nil
-	}
+type matcher interface {
+	boolMatcher
+	Equal(field string, value any) string
+	NotEqual(field string, value any) string
+	GreaterThan(field string, value any) string
+	GreaterEqualThan(field string, value any) string
+	LessThan(field string, value any) string
+	LessEqualThan(field string, value any) string
 }
 
-func (b *whereBuilder) buildComparator(field operation.WhereField) (string, error) {
+type boolMatcher interface {
+	Or(orExpr ...string) string
+	Not(notExpr string) string
+	And(andExpr ...string) string
+}
+
+func (b *whereUpdateBuilder) buildComparator(field operation.WhereField) (string, error) {
 	value := field.Value
 
 	if value == nil {
@@ -381,6 +372,213 @@ func (b *whereBuilder) buildComparator(field operation.WhereField) (string, erro
 		return b.ub.LessThan(field.Name, value), nil
 	case operation.OperatorLessThanOrEqual:
 		return b.ub.LessEqualThan(field.Name, value), nil
+	default:
+		return "", fmt.Errorf("unknown operator: %s", field.Operator)
+	}
+}
+
+// deletePostgresBuilder - строитель запросов для delete операций в PostgreSQL.
+type deletePostgresBuilder struct {
+	basePostgresBuilder
+	where          []operation.Where
+	whereFieldsMap map[string]operation.WhereField
+}
+
+func (b *deletePostgresBuilder) withTable(table string) {
+	b.table = table
+}
+
+func (b *deletePostgresBuilder) withValues(vals map[string]any) {
+	b.args = vals
+}
+
+func (b *deletePostgresBuilder) build() (*storage.Request, error) {
+	if b.table == "" {
+		return nil, errors.New("table is nil")
+	}
+
+	if b.args == nil {
+		return nil, errors.New("args is nil")
+	}
+
+	wb := newWhereDeleteBuilder().withWhere(b.where).withWhereFieldsMap(b.whereFieldsMap).withTable(b.table).withValues(b.args)
+
+	sql, args, err := wb.build()
+	if err != nil {
+		return nil, err
+	}
+
+	return &storage.Request{
+		Val:  sql,
+		Args: args,
+		Raw:  b.args,
+	}, nil
+}
+
+// whereDeleteBuilder - строитель запросов для where delete операций в PostgreSQL.
+type whereDeleteBuilder struct {
+	ub             *sqlbuilder.DeleteBuilder
+	table          string
+	whereFieldsMap map[string]operation.WhereField
+	where          []operation.Where
+	args           map[string]any
+}
+
+func newWhereDeleteBuilder() *whereDeleteBuilder {
+	return &whereDeleteBuilder{}
+}
+
+func (b *whereDeleteBuilder) withWhere(where []operation.Where) *whereDeleteBuilder {
+	b.where = where
+
+	return b
+}
+
+func (b *whereDeleteBuilder) withWhereFieldsMap(whereFieldsMap map[string]operation.WhereField) *whereDeleteBuilder {
+	b.whereFieldsMap = whereFieldsMap
+
+	return b
+}
+
+func (b *whereDeleteBuilder) withTable(table string) *whereDeleteBuilder {
+	b.table = table
+
+	return b
+}
+
+func (b *whereDeleteBuilder) withValues(args map[string]any) *whereDeleteBuilder {
+	b.args = args
+
+	return b
+}
+
+func (b *whereDeleteBuilder) initDeleteBuilder() error {
+	if b.table == "" {
+		return errors.New("table is nil")
+	}
+
+	if b.args == nil {
+		return errors.New("args is nil")
+	}
+
+	ub := sqlbuilder.NewDeleteBuilder()
+	b.ub = ub
+	ub.SetFlavor(sqlbuilder.PostgreSQL)
+	ub.DeleteFrom(b.table)
+
+	return nil
+}
+
+func (b *whereDeleteBuilder) build() (string, []any, error) {
+	if err := b.initDeleteBuilder(); err != nil {
+		return "", nil, err
+	}
+
+	if err := b.applyWhere(); err != nil {
+		return "", nil, err
+	}
+
+	sql, args := b.ub.Build()
+
+	return sql, args, nil
+}
+
+//nolint:dupl // одинаковая реализация, но внутри разные типы билдеров
+func (b *whereDeleteBuilder) applyWhere() error {
+	if len(b.where) == 0 {
+		return nil
+	}
+
+	groupExprs := make([]string, 0, len(b.where))
+	for _, w := range b.where {
+		expr, err := buildWhereExpr(w, b.ub, b.args)
+		if err != nil {
+			return err
+		}
+
+		if expr != "" {
+			groupExprs = append(groupExprs, expr)
+		}
+	}
+
+	switch len(groupExprs) {
+	case 0:
+		// невозможно, т.к. в buildWhereExpr есть проверка на пустоту
+		return nil
+	case 1:
+		b.ub.Where(groupExprs[0])
+		return nil
+	default:
+		b.ub.Where(b.ub.And(groupExprs...))
+		return nil
+	}
+}
+
+func buildWhereExpr(w operation.Where, matcher matcher, args map[string]any) (string, error) {
+	parts := make([]string, 0, len(w.Fields)+len(w.Conditions))
+	for _, f := range w.Fields {
+		expr, err := buildComparator(matcher, f, args)
+		if err != nil {
+			return "", err
+		}
+
+		parts = append(parts, expr)
+	}
+
+	for _, c := range w.Conditions {
+		expr, err := buildWhereExpr(c, matcher, args)
+		if err != nil {
+			return "", err
+		}
+
+		if expr != "" {
+			parts = append(parts, expr)
+		}
+	}
+
+	if len(parts) == 0 {
+		return "", fmt.Errorf("parts is nil")
+	}
+
+	switch w.Type {
+	case operation.WhereTypeOr:
+		return matcher.Or(parts...), nil
+	case operation.WhereTypeNot:
+		return matcher.Not(matcher.And(parts...)), nil
+	default:
+		if len(parts) == 1 {
+			return parts[0], nil
+		}
+
+		return matcher.And(parts...), nil
+	}
+}
+
+func buildComparator(matcher matcher, field operation.WhereField, args map[string]any) (string, error) {
+	value := field.Value
+
+	if value == nil {
+		v, ok := args[field.Name]
+		if !ok {
+			return "", fmt.Errorf("missing value for where field %s", field.Name)
+		}
+
+		value = v
+	}
+
+	switch field.Operator {
+	case operation.OperatorEqual:
+		return matcher.Equal(field.Name, value), nil
+	case operation.OperatorNotEqual:
+		return matcher.NotEqual(field.Name, value), nil
+	case operation.OperatorGreaterThan:
+		return matcher.GreaterThan(field.Name, value), nil
+	case operation.OperatorGreaterThanOrEqual:
+		return matcher.GreaterEqualThan(field.Name, value), nil
+	case operation.OperatorLessThan:
+		return matcher.LessThan(field.Name, value), nil
+	case operation.OperatorLessThanOrEqual:
+		return matcher.LessEqualThan(field.Name, value), nil
 	default:
 		return "", fmt.Errorf("unknown operator: %s", field.Operator)
 	}

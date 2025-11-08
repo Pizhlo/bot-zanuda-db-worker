@@ -84,3 +84,21 @@ func (o *Operation) validateWhereFieldUpdate(w Where) error {
 
 	return nil
 }
+
+// validateWhereFieldDelete валидирует, что поля либо участвуют в удалении, либо в условии where.
+// WARNING: запускать после того, как отработали методы mapWhereFields и mapFieldsDelete.
+// func (o *Operation) validateWhereFieldDelete(w Where) error {
+// 	for _, field := range o.Fields {
+// 		if _, ok := o.WhereFieldsMap[field.Name]; !ok && !field.Delete {
+// 			return fmt.Errorf("where field %q: not deleted and not in where", field.Name)
+// 		}
+// 	}
+
+// 	for _, condition := range w.Conditions {
+// 		if err := o.validateWhereFieldDelete(condition); err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	return nil
+// }
