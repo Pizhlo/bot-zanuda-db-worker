@@ -6,14 +6,13 @@ import (
 	"db-worker/internal/config/operation"
 	"db-worker/internal/service/metrics"
 	"db-worker/internal/service/uow"
-	"db-worker/internal/service/worker"
+	"db-worker/internal/service/uow/mocks"
 	"db-worker/internal/storage"
-	"db-worker/internal/storage/mocks"
+	storagemocks "db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/model"
 	"testing"
 
 	"db-worker/internal/storage/postgres/message"
-	postgres "db-worker/internal/storage/postgres/repo"
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
@@ -126,8 +125,8 @@ func TestGroupStorages(t *testing.T) {
 			defer ctrl.Finish()
 
 			// Создаем мок storages
-			mockStorage1 := mocks.NewMockDriver(ctrl)
-			mockStorage2 := mocks.NewMockDriver(ctrl)
+			mockStorage1 := storagemocks.NewMockDriver(ctrl)
+			mockStorage2 := storagemocks.NewMockDriver(ctrl)
 
 			storagesMap := map[string]storage.Driver{
 				"storage1": mockStorage1,
@@ -209,8 +208,9 @@ func TestInitOperation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockDriver := mocks.NewMockDriver(ctrl)
-	mockStorage := mocks.NewMockDriver(ctrl)
+	mockDriver := storagemocks.NewMockDriver(ctrl)
+	mockStorage := storagemocks.NewMockDriver(ctrl)
+	mockRequestsRepo := mocks.NewMockrequestsRepo(ctrl)
 
 	connection := &mockWorker{
 		name:          "test-connection",
@@ -245,6 +245,7 @@ func TestInitOperation(t *testing.T) {
 				Table: "test-table",
 			},
 		}),
+		uow.WithRequestsRepo(mockRequestsRepo),
 	)
 	require.NoError(t, err)
 
@@ -254,95 +255,6 @@ func TestInitOperation(t *testing.T) {
 	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1, metricsService, 10)
 
 	require.NotNil(t, srv)
-}
-
-//nolint:funlen // много тест-кейсов
-func TestInitOperationServices(t *testing.T) {
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockStorage1 := mocks.NewMockDriver(ctrl)
-	mockStorage2 := mocks.NewMockDriver(ctrl)
-	mockStorage3 := mocks.NewMockDriver(ctrl)
-	mockStorage4 := mocks.NewMockDriver(ctrl)
-
-	cfg := &config.Config{
-		Operations: operation.OperationConfig{
-			Operations: []operation.Operation{
-				{
-					Name:   "test-operation-1",
-					Buffer: 10,
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage-1"},
-						{Name: "test-storage-2"},
-					},
-					Request: operation.Request{
-						From: "test-connection-1"},
-				},
-				{
-					Name:   "test-operation-2",
-					Buffer: 10,
-					Storages: []operation.StorageCfg{
-						{Name: "test-storage-3"},
-						{Name: "test-storage-4"},
-					},
-					Request: operation.Request{
-						From: "test-connection-2",
-					},
-				},
-			},
-		},
-	}
-
-	connection1 := &mockWorker{name: "test-connection-1", msgChan: make(chan map[string]interface{})}
-	connection2 := &mockWorker{name: "test-connection-2", msgChan: make(chan map[string]interface{})}
-
-	connections := map[string]worker.Worker{
-		"test-connection-1": connection1,
-		"test-connection-2": connection2,
-	}
-
-	storagesMap := map[string]storage.Driver{
-		"test-storage-1": mockStorage1,
-		"test-storage-2": mockStorage2,
-		"test-storage-3": mockStorage3,
-		"test-storage-4": mockStorage4,
-	}
-
-	mockStorage1.EXPECT().Name().Return("test-storage-1").AnyTimes()
-	mockStorage2.EXPECT().Name().Return("test-storage-2").AnyTimes()
-	mockStorage3.EXPECT().Name().Return("test-storage-3").AnyTimes()
-	mockStorage4.EXPECT().Name().Return("test-storage-4").AnyTimes()
-
-	opts := []postgres.RepoOption{
-		postgres.WithAddr("test-addr"),
-		postgres.WithInsertTimeout(1000),
-		postgres.WithReadTimeout(1000),
-		postgres.WithCfg(&config.Postgres{
-			Host:     "test-host",
-			Port:     5432,
-			User:     "test-user",
-			Password: "test-password",
-			DBName:   "test-db",
-		}),
-		postgres.WithTable("test-table"),
-		postgres.WithName("test connection"),
-	}
-
-	repo, err := postgres.New(context.Background(), opts...)
-	require.NoError(t, err)
-
-	metricsService := metrics.New(
-		metrics.WithRegisterer(prometheus.NewRegistry()),
-	)
-
-	services, err := initOperationServices(cfg, connections, storagesMap, repo, nil, metricsService)
-	require.NoError(t, err)
-	require.NotNil(t, services)
-
-	assert.Equal(t, len(cfg.Operations.Operations), len(services))
 }
 
 func TestInitRabbit(t *testing.T) {

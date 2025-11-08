@@ -4,7 +4,6 @@ import (
 	"context"
 	"db-worker/internal/config/operation"
 	"db-worker/internal/storage"
-	"encoding/json"
 	"fmt"
 )
 
@@ -14,12 +13,8 @@ func (s *Service) saveRequests(ctx context.Context, utilityTx storage.Transactio
 	op := s.operationForSavingRequests(utilityTx)
 
 	// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
-	for driver, req := range requests {
-		msg, err := fieldsForReq(*req, utilityTx.ID(), string(driver.Type()), driver.Name())
-		if err != nil {
-			return fmt.Errorf("error building fields for request: %w", err)
-		}
-
+	for driver := range requests {
+		msg := fieldsForReq(utilityTx.ID(), string(driver.Type()), driver.Name())
 		// создаем запросы для сохранения транзакции
 		reqs, err := s.BuildRequests(msg, s.requestsDriversMap, op)
 		if err != nil {
@@ -47,16 +42,10 @@ func (s *Service) operationForSavingRequests(tx storage.TransactionEditor) opera
 }
 
 // fieldsForReq составляет поля для составления запросов для сохранения \ изменения пользовательских запросов.
-func fieldsForReq(req storage.Request, txID string, driverType, driverName string) (map[string]any, error) {
-	jsonData, err := json.Marshal(req.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling request raw: %w", err)
-	}
-
+func fieldsForReq(txID string, driverType, driverName string) map[string]any {
 	return map[string]any{
-		"data":        jsonData,
 		"tx_id":       txID,
 		"driver_type": driverType,
 		"driver_name": driverName,
-	}, nil
+	}
 }

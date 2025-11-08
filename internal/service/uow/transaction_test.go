@@ -6,6 +6,7 @@ import (
 	"db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/testtransaction"
 	"db-worker/pkg/random"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -14,286 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:funlen,dupl // много тест-кейсов, похожие тесты
-func TestBeginTx(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name             string
-		createSvc        func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
-		createRequests   func(storageDriver storage.Driver) map[storage.Driver]*storage.Request
-		createExpectedTx func(storageDriver storage.Driver) storage.TransactionEditor
-		setupMocks       func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver)
-		checkTx          func(t *testing.T, expectedTx storage.TransactionEditor, actualTx storage.TransactionEditor)
-		wantErr          require.ErrorAssertionFunc
-	}{
-		{
-			name: "positive case",
-			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
-				return &Service{
-					cfg: &operation.Operation{
-						Name: "test-operation",
-						Hash: []byte{0x1, 0x2, 0x3},
-					},
-					storage: systemDriver,
-					transactionDriversMap: map[string]DriversMap{
-						StorageNameForTransactionsTable: {
-							driver: systemDriver,
-							cfg: operation.StorageCfg{
-								Name:  StorageNameForTransactionsTable,
-								Table: "transactions.transactions",
-							},
-						},
-						StorageNameForRequestsTable: {
-							driver: systemDriver,
-							cfg: operation.StorageCfg{
-								Name:  StorageNameForRequestsTable,
-								Table: "transactions.requests",
-							},
-						},
-					},
-					systemStoragesMap: map[string]storage.Driver{
-						StorageNameForTransactionsTable: systemDriver,
-						StorageNameForRequestsTable:     systemDriver,
-					},
-					systemStorageConfigs: []operation.StorageCfg{
-						{
-							Name:  StorageNameForTransactionsTable,
-							Type:  operation.StorageTypePostgres,
-							Table: "transactions.transactions",
-						},
-						{
-							Name:  StorageNameForRequestsTable,
-							Type:  operation.StorageTypePostgres,
-							Table: "transactions.requests",
-						},
-					},
-				}
-			},
-			createRequests: func(storageDriver storage.Driver) map[storage.Driver]*storage.Request {
-				return map[storage.Driver]*storage.Request{
-					storageDriver: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				}
-			},
-			createExpectedTx: func(storageDriver storage.Driver) storage.TransactionEditor {
-				return testtransaction.NewTestTransaction(
-					testtransaction.WithStatus(string(storage.TxStatusInProgress)),
-					testtransaction.WithRequests(map[storage.Driver]*storage.Request{
-						storageDriver: {
-							Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-							Args: []any{"1"},
-						},
-					}),
-					testtransaction.WithBegun(map[storage.Driver]struct{}{
-						storageDriver: {},
-					}),
-					testtransaction.WithOperationHash([]byte{0x1, 0x2, 0x3}),
-				)
-			},
-			checkTx: func(t *testing.T, expectedTx storage.TransactionEditor, actualTx storage.TransactionEditor) {
-				t.Helper()
-
-				assert.Equal(t, expectedTx.Begun(), actualTx.Begun())
-				assert.Equal(t, expectedTx.Requests(), actualTx.Requests())
-				assert.Equal(t, expectedTx.Error(), actualTx.Error())
-				assert.Equal(t, expectedTx.FailedDriver(), actualTx.FailedDriver())
-				assert.Equal(t, expectedTx.Status(), actualTx.Status())
-				assert.Equal(t, expectedTx.InstanceID(), actualTx.InstanceID())
-				assert.Equal(t, expectedTx.OperationHash(), actualTx.OperationHash())
-				assert.Equal(t, expectedTx.Drivers(), actualTx.Drivers())
-
-				assert.Len(t, actualTx.ID(), 20)
-			},
-			setupMocks: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) {
-				t.Helper()
-
-				systemDriver.EXPECT().Name().Return("test-storage").AnyTimes()
-				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
-
-				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-
-				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
-				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
-
-				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil)
-			},
-			wantErr: require.NoError,
-		},
-		{
-			name: "error case: failed to begin transaction in driver",
-			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
-				return &Service{
-					cfg: &operation.Operation{
-						Name: "test-operation",
-						Hash: []byte{0x1, 0x2, 0x3},
-					},
-					storage: systemDriver,
-					transactionDriversMap: map[string]DriversMap{
-						StorageNameForTransactionsTable: {
-							driver: systemDriver,
-							cfg: operation.StorageCfg{
-								Name:  StorageNameForTransactionsTable,
-								Table: "transactions.transactions",
-							},
-						},
-						StorageNameForRequestsTable: {
-							driver: systemDriver,
-							cfg: operation.StorageCfg{
-								Name:  StorageNameForRequestsTable,
-								Table: "transactions.requests",
-							},
-						},
-					},
-					systemStoragesMap: map[string]storage.Driver{
-						StorageNameForTransactionsTable: systemDriver,
-						StorageNameForRequestsTable:     systemDriver,
-					},
-					systemStorageConfigs: []operation.StorageCfg{
-						{
-							Name:  StorageNameForTransactionsTable,
-							Type:  operation.StorageTypePostgres,
-							Table: "transactions.transactions",
-						},
-						{
-							Name:  StorageNameForRequestsTable,
-							Type:  operation.StorageTypePostgres,
-							Table: "transactions.requests",
-						},
-					},
-				}
-			},
-			createRequests: func(storageDriver storage.Driver) map[storage.Driver]*storage.Request {
-				return map[storage.Driver]*storage.Request{
-					storageDriver: {
-						Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-						Args: []any{"1"},
-					},
-				}
-			},
-			createExpectedTx: func(storageDriver storage.Driver) storage.TransactionEditor {
-				return nil // возвращаем nil из-за ошибки
-			},
-			checkTx: func(t *testing.T, _, actualTx storage.TransactionEditor) {
-				t.Helper()
-
-				assert.Nil(t, actualTx)
-			},
-			setupMocks: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) {
-				t.Helper()
-
-				systemDriver.EXPECT().Name().Return("test-storage").AnyTimes()
-				systemDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
-
-				systemDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-
-				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
-				userDriver.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
-
-				userDriver.EXPECT().Begin(gomock.Any(), gomock.Any()).Return(errors.New("error"))
-			},
-			wantErr: require.Error,
-		},
-		{
-			name: "error in newTx",
-			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
-				return &Service{
-					cfg: &operation.Operation{
-						Name: "test-operation",
-						Hash: []byte{0x1, 0x2, 0x3},
-					},
-					storage: systemDriver,
-					transactionDriversMap: map[string]DriversMap{
-						StorageNameForTransactionsTable: {
-							driver: systemDriver,
-							cfg: operation.StorageCfg{
-								Name:  StorageNameForTransactionsTable,
-								Table: "transactions.transactions",
-							},
-						},
-						StorageNameForRequestsTable: {
-							driver: systemDriver,
-							cfg: operation.StorageCfg{
-								Name:  StorageNameForRequestsTable,
-								Table: "transactions.requests",
-							},
-						},
-					},
-					systemStoragesMap: map[string]storage.Driver{
-						StorageNameForTransactionsTable: systemDriver,
-						StorageNameForRequestsTable:     systemDriver,
-					},
-					systemStorageConfigs: []operation.StorageCfg{
-						{
-							Name:  StorageNameForTransactionsTable,
-							Type:  operation.StorageTypePostgres,
-							Table: "transactions.transactions",
-						},
-						{
-							Name:  StorageNameForRequestsTable,
-							Type:  operation.StorageTypePostgres,
-							Table: "transactions.requests",
-						},
-					},
-				}
-			},
-			createRequests: func(storageDriver storage.Driver) map[storage.Driver]*storage.Request {
-				t.Helper()
-
-				return nil
-			},
-			createExpectedTx: func(storageDriver storage.Driver) storage.TransactionEditor {
-				t.Helper()
-
-				return nil
-			},
-			setupMocks: func(t *testing.T, systemDriver, userDriver *mocks.MockDriver) {
-				t.Helper()
-			},
-			checkTx: func(t *testing.T, _, actualTx storage.TransactionEditor) {
-				t.Helper()
-
-				assert.Nil(t, actualTx)
-			},
-			wantErr: require.Error,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			// системное хранилище - это хранилище, в котором сохраняются транзакции
-			// пользовательское хранилище - это хранилище, в котором сохраняются данные пользователей
-			systemDriver := mocks.NewMockDriver(ctrl)
-			userDriver := mocks.NewMockDriver(ctrl)
-
-			svc := tt.createSvc(systemDriver, userDriver)
-
-			tt.setupMocks(t, systemDriver, userDriver)
-
-			actualTx, err := svc.beginTx(t.Context(), tt.createRequests(userDriver))
-			tt.wantErr(t, err)
-
-			tt.checkTx(t, tt.createExpectedTx(userDriver), actualTx)
-		})
-	}
-}
-
-//nolint:funlen,dupl // много тест-кейсов, похожие тесты
+//nolint:funlen // много тест-кейсов
 func TestNewTx(t *testing.T) {
 	t.Parallel()
 
@@ -301,6 +23,7 @@ func TestNewTx(t *testing.T) {
 		name             string
 		createSvc        func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
 		createRequests   func(storageDriver storage.Driver) map[storage.Driver]*storage.Request
+		rawReq           map[string]any
 		createExpectedTx func(storageDriver storage.Driver) storage.TransactionEditor
 		setupMocks       func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver)
 		checkTx          func(t *testing.T, expectedTx storage.TransactionEditor, actualTx storage.TransactionEditor)
@@ -318,6 +41,9 @@ func TestNewTx(t *testing.T) {
 						Args: []any{"1"},
 					},
 				}
+			},
+			rawReq: map[string]any{
+				"id": 1,
 			},
 			createExpectedTx: func(storageDriver storage.Driver) storage.TransactionEditor {
 				return testtransaction.NewTestTransaction(
@@ -460,7 +186,7 @@ func TestNewTx(t *testing.T) {
 
 			tt.setupMocks(t, systemDriver, userDriver)
 
-			actualTx, err := svc.newTx(t.Context(), tt.createRequests(userDriver))
+			actualTx, err := svc.newTx(t.Context(), tt.createRequests(userDriver), tt.rawReq)
 			tt.wantErr(t, err)
 
 			tt.checkTx(t, tt.createExpectedTx(userDriver), actualTx)
@@ -532,6 +258,9 @@ func TestBeginInDriver(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 			},
 			setupMocks: func(t *testing.T, driver *mocks.MockDriver, _ *mocks.MockDriver) {
@@ -599,6 +328,9 @@ func TestBeginInDriver(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 			},
 			checkTx: func(t *testing.T, tx *storage.Transaction, driver storage.Driver) {
@@ -680,6 +412,9 @@ func TestBeginInDriver(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 			},
 			setupMocks: func(t *testing.T, driver *mocks.MockDriver, systemDriver *mocks.MockDriver) {
@@ -746,6 +481,9 @@ func TestBeginInDriver(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -970,6 +708,9 @@ func TestSaveTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1078,6 +819,9 @@ func TestSaveTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1119,6 +863,9 @@ func TestSaveTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1172,6 +919,9 @@ func TestSaveTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1225,6 +975,9 @@ func TestSaveTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1280,6 +1033,9 @@ func TestSaveTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1373,6 +1129,9 @@ func TestUpdateTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1441,6 +1200,9 @@ func TestUpdateTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1482,6 +1244,9 @@ func TestUpdateTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1540,6 +1305,9 @@ func TestUpdateTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1595,6 +1363,9 @@ func TestUpdateTx(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)
@@ -1665,7 +1436,7 @@ func TestFieldsForTx(t *testing.T) {
 
 	userDriver := mocks.NewMockDriver(ctrl)
 
-	err := errors.New("test error")
+	testErr := errors.New("test error")
 
 	txID := random.String(10)
 
@@ -1678,10 +1449,13 @@ func TestFieldsForTx(t *testing.T) {
 			},
 		}),
 		testtransaction.WithFailedDriver(userDriver),
-		testtransaction.WithErr(err),
+		testtransaction.WithErr(testErr),
 		testtransaction.WithInstanceID(1),
 		testtransaction.WithOperationHash([]byte{0x1, 0x2, 0x3}),
 		testtransaction.WithID(txID),
+		testtransaction.WithRawReq(map[string]any{
+			"id": 1,
+		}),
 	)
 
 	svc := &Service{
@@ -1691,16 +1465,24 @@ func TestFieldsForTx(t *testing.T) {
 		},
 	}
 
+	jsonData, err := json.Marshal(tx.RawReq())
+	require.NoError(t, err)
+
 	expectedFields := map[string]any{
 		"id":             txID,
 		"status":         string(storage.TxStatusFailed),
-		"error":          err.Error(),
+		"error":          testErr.Error(),
 		"instance_id":    svc.instanceID,
 		"failed_driver":  "test-storage",
 		"operation_hash": svc.cfg.Hash,
+		"operation_type": svc.cfg.Type,
+		"data":           jsonData,
 	}
 
 	userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
 
-	assert.Equal(t, expectedFields, svc.fieldsForTx(tx))
+	fields, testErr := svc.fieldsForTx(tx)
+	require.NoError(t, testErr)
+
+	assert.Equal(t, expectedFields, fields)
 }

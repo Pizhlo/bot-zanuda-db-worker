@@ -43,7 +43,7 @@ type Service struct {
 //go:generate mockgen -source=operation.go -destination=mocks/mocks.go -package=mocks
 type unitOfWork interface {
 	BuildRequests(msg map[string]interface{}, driversMap map[string]uow.DriversMap, operation operation.Operation) (map[storage.Driver]*storage.Request, error)
-	ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) error
+	ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request, raw map[string]any) error
 	StoragesMap() map[string]uow.DriversMap
 }
 

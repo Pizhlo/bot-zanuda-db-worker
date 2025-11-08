@@ -20,6 +20,7 @@ type TestTransaction struct {
 	instanceID    int    // экземпляр приложения, выполняющий транзакцию
 	operationHash []byte // хеш операции
 	originalTx    storage.TransactionEditor
+	rawReq        map[string]any
 }
 
 type option func(*TestTransaction)
@@ -84,6 +85,13 @@ func WithOperationHash(operationHash []byte) option {
 func WithOriginalTx(originalTx storage.TransactionEditor) option {
 	return func(tx *TestTransaction) {
 		tx.originalTx = originalTx
+	}
+}
+
+// WithRawReq устанавливает raw запросы транзакции.
+func WithRawReq(rawReq map[string]any) option {
+	return func(tx *TestTransaction) {
+		tx.rawReq = rawReq
 	}
 }
 
@@ -219,4 +227,9 @@ func (tx *TestTransaction) FailedDriverName() string {
 	}
 
 	return failedDriverName
+}
+
+// RawReq возвращает raw запросы транзакции.
+func (tx *TestTransaction) RawReq() map[string]any {
+	return tx.rawReq
 }

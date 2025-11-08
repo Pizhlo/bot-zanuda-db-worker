@@ -18,6 +18,7 @@ import (
 	"db-worker/internal/storage/postgres/message"
 	"db-worker/internal/storage/postgres/migration"
 	postgres "db-worker/internal/storage/postgres/repo"
+	"db-worker/internal/storage/transaction"
 
 	"flag"
 	"fmt"
@@ -72,6 +73,21 @@ func main() {
 	notifyCtx, notify := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer notify()
 
+	// сначала загружаем миграции
+	migrationRepo := initMigrationRepo(notifyCtx, cfg.Storage.Postgres)
+	defer butler.stop(notifyCtx, migrationRepo)
+
+	go butler.start(func() error {
+		return migrationRepo.Run(notifyCtx)
+	})
+
+	migrationService := initMigrationService(migrationRepo)
+	defer butler.stop(notifyCtx, migrationService)
+
+	if err := migrationService.Run(notifyCtx); err != nil {
+		logrus.WithError(err).Fatalf("error loading migrations")
+	}
+
 	// запуск воркеров для получения сообщений
 	connections, err := initWorkers(cfg)
 	if err != nil {
@@ -117,7 +133,14 @@ func main() {
 
 	metricsService := initMetricsService()
 
-	operations, err := initOperationServices(cfg, connections, storagesMap, txRepo, messageRepo, metricsService)
+	transactionRepo := initTransactionRepo(notifyCtx, cfg.Storage.Postgres)
+
+	go butler.start(func() error {
+		return transactionRepo.Run(notifyCtx)
+	})
+	defer butler.stop(notifyCtx, transactionRepo)
+
+	operations, err := initOperationServices(notifyCtx, cfg, connections, storagesMap, txRepo, messageRepo, metricsService, transactionRepo)
 	if err != nil {
 		logrus.WithError(err).Fatalf("error initializing operation services")
 	}
@@ -129,24 +152,6 @@ func main() {
 
 		defer butler.stop(notifyCtx, operation)
 	}
-
-	migrationRepo := initMigrationRepo(notifyCtx, cfg.Storage.Postgres)
-	defer butler.stop(notifyCtx, migrationRepo)
-
-	go butler.start(func() error {
-		return migrationRepo.Run(notifyCtx)
-	})
-
-	migrationService := initMigrationService(migrationRepo)
-	defer butler.stop(notifyCtx, migrationService)
-
-	go butler.start(func() error {
-		if err := migrationService.Run(notifyCtx); err != nil {
-			logrus.WithError(err).Fatalf("error loading migrations")
-		}
-
-		return err
-	})
 
 	redis := initRedisStorage(notifyCtx, cfg.Storage.Redis)
 	defer butler.stop(notifyCtx, redis)
@@ -317,6 +322,16 @@ func initPostgresStorage(ctx context.Context, cfg config.Postgres, name string, 
 	))
 }
 
+func initTransactionRepo(ctx context.Context, cfg config.Postgres) *transaction.Repo {
+	return start(transaction.New(ctx,
+		transaction.WithAddr(formatPostgresAddr(cfg)),
+		transaction.WithInsertTimeout(cfg.InsertTimeout),
+		transaction.WithReadTimeout(cfg.ReadTimeout),
+		transaction.WithName("transactions"),
+		transaction.WithCfg(&cfg),
+	))
+}
+
 func initMessageRepo(ctx context.Context, cfg config.Postgres) *message.Repo {
 	return start(message.New(ctx,
 		message.WithAddr(formatPostgresAddr(cfg)),
@@ -335,7 +350,8 @@ func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo
 	))
 }
 
-func initOperationServices(cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver, messageRepo *message.Repo, metricsService *metrics.Service) (map[string]*operation_srv.Service, error) {
+//nolint:funlen // много кода на запуск сервиса
+func initOperationServices(ctx context.Context, cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver, messageRepo *message.Repo, metricsService *metrics.Service, transactionRepo *transaction.Repo) (map[string]*operation_srv.Service, error) {
 	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
 	systemStorageConfigs := make([]operation.StorageCfg, 0, 2) // пока что только postgres (transactions.transactions и transactions.requests)
@@ -388,7 +404,12 @@ func initOperationServices(cfg *config.Config, connections map[string]worker.Wor
 			driversMap[storage.Name()] = storage
 		}
 
-		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID)
+		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID, transactionRepo)
+
+		err = uow.LoadOnStartup(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error loading on startup: %w", err)
+		}
 
 		op := initOperation(operationCfg, conn, uow, messageRepo, driversMap, cfg.InstanceID, metricsService, operationCfg.Buffer)
 
@@ -417,13 +438,14 @@ func groupStorages(storagesCfg []operation.StorageCfg, storagesMap map[string]st
 	return storages, nil
 }
 
-func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo storage.Driver, systemStorageConfigs []operation.StorageCfg, instanceID int) *uow.Service {
+func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo storage.Driver, systemStorageConfigs []operation.StorageCfg, instanceID int, transactionRepo *transaction.Repo) *uow.Service {
 	return start(uow.New(
 		uow.WithStorages(storages),
 		uow.WithCfg(operationCfg),
 		uow.WithStorage(repo),
 		uow.WithSystemStorageConfigs(systemStorageConfigs),
 		uow.WithInstanceID(instanceID),
+		uow.WithRequestsRepo(transactionRepo),
 	))
 }
 

@@ -182,7 +182,7 @@ func (s *Service) processMessage(ctx context.Context, msg map[string]any, ids []
 		return fmt.Errorf("error update messages: %w", err)
 	}
 
-	err = s.uow.ExecRequests(ctx, requests)
+	err = s.uow.ExecRequests(ctx, requests, msg)
 	if err != nil {
 		// не обновляем статус сообщений, т.к. валидация прошла успешно, а дальше это работа UOW
 		return fmt.Errorf("error exec requests: %w", err)

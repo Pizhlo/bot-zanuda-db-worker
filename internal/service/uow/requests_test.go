@@ -6,7 +6,6 @@ import (
 	"db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/testtransaction"
 	"db-worker/pkg/random"
-	"encoding/json"
 	"errors"
 	"testing"
 
@@ -210,28 +209,15 @@ func TestFieldsForReq(t *testing.T) {
 
 	txID := random.String(10)
 
-	req := storage.Request{
-		Val:  "INSERT INTO users.users (user_id) VALUES ($1)",
-		Args: []any{"1"},
-		Raw: map[string]any{
-			"user_id": "1",
-		},
-	}
-
-	jsonData, err := json.Marshal(req.Raw)
-	require.NoError(t, err)
-
 	driverType, driverName := string(operation.StorageTypePostgres), "test-storage"
 
 	expectedFields := map[string]any{
-		"data":        jsonData,
 		"tx_id":       txID,
 		"driver_type": driverType,
 		"driver_name": driverName,
 	}
 
-	msg, err := fieldsForReq(req, txID, driverType, driverName)
-	require.NoError(t, err)
+	msg := fieldsForReq(txID, driverType, driverName)
 
 	assert.Equal(t, expectedFields, msg)
 }

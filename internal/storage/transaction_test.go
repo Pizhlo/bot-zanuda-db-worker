@@ -25,6 +25,7 @@ func TestNewTransaction(t *testing.T) {
 		requests      map[Driver]*Request
 		instanceID    int
 		operationHash []byte
+		rawReq        map[string]any
 		want          *Transaction
 		wantError     require.ErrorAssertionFunc
 		checkWant     func(want, got *Transaction)
@@ -43,6 +44,10 @@ func TestNewTransaction(t *testing.T) {
 			},
 			instanceID:    1,
 			operationHash: []byte{0x1, 0x2, 0x3},
+			rawReq: map[string]any{
+				"id":   1,
+				"name": "ivan",
+			},
 			want: &Transaction{
 				status: TxStatusInProgress,
 				requests: map[Driver]*Request{
@@ -73,11 +78,19 @@ func TestNewTransaction(t *testing.T) {
 			name:          "requests not provided",
 			instanceID:    1,
 			operationHash: []byte{0x1, 0x2, 0x3},
-			wantError:     require.Error,
+			rawReq: map[string]any{
+				"id":   1,
+				"name": "ivan",
+			},
+			wantError: require.Error,
 		},
 		{
 			name:       "operation hash not provided",
 			instanceID: 1,
+			rawReq: map[string]any{
+				"id":   1,
+				"name": "ivan",
+			},
 			requests: map[Driver]*Request{
 				driver: {
 					Val:  "insert into users.users (id, name) values ($1, $2)",
@@ -96,7 +109,7 @@ func TestNewTransaction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			tx, err := NewTransaction(tt.requests, tt.instanceID, tt.operationHash)
+			tx, err := NewTransaction(tt.requests, tt.instanceID, tt.operationHash, tt.rawReq)
 			tt.wantError(t, err)
 
 			if tt.checkWant != nil {
@@ -104,6 +117,36 @@ func TestNewTransaction(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewTransactionFromModel(t *testing.T) {
+	t.Parallel()
+
+	model := &TransactionModel{
+		ID:            random.String(10),
+		Status:        TxStatusInProgress,
+		InstanceID:    1,
+		OperationHash: []byte{0x1, 0x2, 0x3},
+		Data: map[string]any{
+			"id":   1,
+			"name": "ivan",
+		},
+	}
+
+	expected := &Transaction{
+		id:            model.ID,
+		status:        TxStatusInProgress,
+		requests:      make(map[Driver]*Request),
+		begun:         make(map[Driver]struct{}),
+		instanceID:    model.InstanceID,
+		operationHash: model.OperationHash,
+		rawReq:        model.Data,
+		err:           ErrEmpty,
+	}
+
+	tx := NewTransactionFromModel(model)
+
+	assert.Equal(t, expected, tx)
 }
 
 func TestTransaction_SetFailedDriver(t *testing.T) {
@@ -380,8 +423,7 @@ func TestTransaction_SaveRequests(t *testing.T) {
 
 	tx.SaveRequests(requests)
 
-	assert.NotEqual(t, requests, tx.Requests())
-	assert.Empty(t, tx.Requests())
+	assert.Equal(t, requests, tx.Requests())
 }
 
 func TestTransaction_ID(t *testing.T) {
@@ -416,6 +458,21 @@ func TestTransaction_ErrorString(t *testing.T) {
 	}
 
 	assert.Equal(t, err.Error(), tx.ErrorString())
+}
+
+func TestTransaction_RawReq(t *testing.T) {
+	t.Parallel()
+
+	rawReq := map[string]any{
+		"id":   1,
+		"name": "ivan",
+	}
+
+	tx := &Transaction{
+		rawReq: rawReq,
+	}
+
+	assert.Equal(t, rawReq, tx.RawReq())
 }
 
 func TestTransaction_FailedDriver(t *testing.T) {
@@ -1170,4 +1227,21 @@ func TestUtilityTransaction_FailedDriverName(t *testing.T) {
 			assert.Equal(t, tt.want, tt.tx().FailedDriverName())
 		})
 	}
+}
+
+func TestUtilityTransaction_RawReq(t *testing.T) {
+	t.Parallel()
+
+	rawReq := map[string]any{
+		"id":   1,
+		"name": "ivan",
+	}
+
+	tx := &utilityTransaction{
+		originalTx: &Transaction{
+			rawReq: rawReq,
+		},
+	}
+
+	assert.Equal(t, rawReq, tx.RawReq())
 }

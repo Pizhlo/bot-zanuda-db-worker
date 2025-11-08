@@ -9,17 +9,18 @@ create schema if not exists transactions;
 create table if not exists transactions.transactions (
     id varchar PRIMARY KEY,
     status tx_status NOT NULL,
+    data JSONB NOT NULL, -- мапа с полями сообщения: "field1": "value1", "field2": "value2"
     error varchar,
     instance_id integer, -- id экземпляра приложения, который выполняет транзакцию. может быть null
     failed_driver varchar, -- название драйвера, который не успел выполниться (если есть)
     operation_hash BYTEA NOT NULL, -- hash операции, которая выполняется в транзакции. нужно для того, чтобы можно было не выполнять операцию, если изменилась конфигурация.
-    created_at BIGINT NOT NULL DEFAULT extract(epoch from current_timestamp)::BIGINT-- extract(epoch from current_timestamp)::BIGINT - получить текущее время в секундах
+    operation_type varchar not null, -- тип операции, которая выполняется в транзакции.
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now() -- время создания в UTC
 );
 
 -- таблица с запросами на создание / удаление сущностей
 CREATE TABLE IF NOT EXISTS transactions.requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    data JSONB NOT NULL, -- мапа с полями сообщения: "field1": "value1", "field2": "value2"
     tx_id varchar NOT NULL,
     driver_type varchar not null,
     driver_name varchar not null,
@@ -45,5 +46,5 @@ CREATE TABLE IF NOT EXISTS messages.messages (
     driver_name varchar not null,
     instance_id integer,
     operation_hash BYTEA NOT NULL,
-    created_at BIGINT NOT NULL DEFAULT extract(epoch from current_timestamp)::BIGINT
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now() -- время создания в UTC
 );

@@ -4,33 +4,16 @@ import (
 	"context"
 	"db-worker/internal/config/operation"
 	"db-worker/internal/storage"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
 )
 
-// beginTx начинает транзакцию.
-func (s *Service) beginTx(ctx context.Context, requests map[storage.Driver]*storage.Request) (*storage.Transaction, error) {
-	tx, err := s.newTx(ctx, requests)
-	if err != nil {
-		return nil, fmt.Errorf("error creating transaction: %w", err)
-	}
-
-	// начинаем транзакцию в пользовательских хранилищах
-	for driver := range requests {
-		err := s.beginInDriver(ctx, tx, driver)
-		if err != nil {
-			return nil, fmt.Errorf("error beginning transaction: %+v", err)
-		}
-	}
-
-	return tx, nil
-}
-
 // newTx создает новую транзакцию и сохраняет в системное хранилище.
-func (s *Service) newTx(ctx context.Context, requests map[storage.Driver]*storage.Request) (*storage.Transaction, error) {
-	tx, err := storage.NewTransaction(requests, s.instanceID, s.cfg.Hash)
+func (s *Service) newTx(ctx context.Context, requests map[storage.Driver]*storage.Request, raw map[string]any) (*storage.Transaction, error) {
+	tx, err := storage.NewTransaction(requests, s.instanceID, s.cfg.Hash, raw)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transaction: %w", err)
 	}
@@ -155,6 +138,8 @@ func (s *Service) finishTx(ctx context.Context, tx storage.TransactionEditor) er
 
 // saveTx сохраняет новую транзакцию в кэш и хранилище.
 // Для сохранения уже имеющейся транзакции необходимо использовать метод updateTx.
+//
+//nolint:cyclop // заведена задача BZ-95 на рефакторинг этого метода
 func (s *Service) saveTx(ctx context.Context, tx storage.TransactionEditor) error {
 	// создаем вспомогательную транзакцию для сохранения основной.
 	// вспомогательная транзакция нужна только как прослойка для сохранения основной, и не будет сохранена в БД.
@@ -175,7 +160,10 @@ func (s *Service) saveTx(ctx context.Context, tx storage.TransactionEditor) erro
 		return fmt.Errorf("error creating utility transaction: %w", err)
 	}
 
-	msg := s.fieldsForTx(tx)
+	msg, err := s.fieldsForTx(tx)
+	if err != nil {
+		return fmt.Errorf("error building fields for saving transaction: %w", err)
+	}
 
 	op := s.operationForSavingTx(tx)
 
@@ -235,7 +223,10 @@ func (s *Service) updateTX(ctx context.Context, tx storage.TransactionEditor) er
 		return fmt.Errorf("error creating utility transaction: %w", err)
 	}
 
-	msg := s.fieldsForTx(tx)
+	msg, err := s.fieldsForTx(tx)
+	if err != nil {
+		return fmt.Errorf("error building fields for updating transaction: %w", err)
+	}
 
 	op := s.operationForUpdatingTx()
 
@@ -274,15 +265,22 @@ func (s *Service) updateTX(ctx context.Context, tx storage.TransactionEditor) er
 }
 
 // fieldsForTx составляет поля для составления запросов для сохранения \ изменения транзакции.
-func (s *Service) fieldsForTx(tx storage.TransactionEditor) map[string]any {
+func (s *Service) fieldsForTx(tx storage.TransactionEditor) (map[string]any, error) {
+	jsonData, err := json.Marshal(tx.RawReq())
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request raw: %w", err)
+	}
+
 	return map[string]interface{}{
 		"id":             tx.ID(),
 		"status":         tx.Status(),
 		"error":          tx.ErrorString(),
 		"instance_id":    s.instanceID,
 		"failed_driver":  tx.FailedDriverName(),
+		"data":           jsonData,
 		"operation_hash": s.cfg.Hash,
-	}
+		"operation_type": s.cfg.Type,
+	}, nil
 }
 
 // operationForSavingTx составляет операцию для сохранения транзакции.

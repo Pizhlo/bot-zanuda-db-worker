@@ -54,17 +54,17 @@ func (mr *MockunitOfWorkMockRecorder) BuildRequests(msg, driversMap, operation i
 }
 
 // ExecRequests mocks base method.
-func (m *MockunitOfWork) ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) error {
+func (m *MockunitOfWork) ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request, raw map[string]any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExecRequests", ctx, requests)
+	ret := m.ctrl.Call(m, "ExecRequests", ctx, requests, raw)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ExecRequests indicates an expected call of ExecRequests.
-func (mr *MockunitOfWorkMockRecorder) ExecRequests(ctx, requests interface{}) *gomock.Call {
+func (mr *MockunitOfWorkMockRecorder) ExecRequests(ctx, requests, raw interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecRequests", reflect.TypeOf((*MockunitOfWork)(nil).ExecRequests), ctx, requests)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecRequests", reflect.TypeOf((*MockunitOfWork)(nil).ExecRequests), ctx, requests, raw)
 }
 
 // StoragesMap mocks base method.
