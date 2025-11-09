@@ -351,7 +351,16 @@ func initMigrationRepo(ctx context.Context, cfg config.Postgres) *migration.Repo
 }
 
 //nolint:funlen // много кода на запуск сервиса
-func initOperationServices(ctx context.Context, cfg *config.Config, connections map[string]worker.Worker, storagesMap map[string]storage.Driver, txRepo storage.Driver, messageRepo *message.Repo, metricsService *metrics.Service, transactionRepo *transaction.Repo) (map[string]*operation_srv.Service, error) {
+func initOperationServices(
+	ctx context.Context,
+	cfg *config.Config,
+	connections map[string]worker.Worker,
+	storagesMap map[string]storage.Driver,
+	txRepo storage.Driver,
+	messageRepo *message.Repo,
+	metricsService *metrics.Service,
+	transactionRepo *transaction.Repo,
+) (map[string]*operation_srv.Service, error) {
 	operations := make(map[string]*operation_srv.Service, len(cfg.Operations.Operations))
 
 	systemStorageConfigs := make([]operation.StorageCfg, 0, 2) // пока что только postgres (transactions.transactions и transactions.requests)
@@ -404,7 +413,7 @@ func initOperationServices(ctx context.Context, cfg *config.Config, connections 
 			driversMap[storage.Name()] = storage
 		}
 
-		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID, transactionRepo)
+		uow := initUow(storages, &operationCfg, txRepo, systemStorageConfigs, cfg.InstanceID, transactionRepo, metricsService)
 
 		err = uow.LoadOnStartup(ctx)
 		if err != nil {
@@ -438,7 +447,7 @@ func groupStorages(storagesCfg []operation.StorageCfg, storagesMap map[string]st
 	return storages, nil
 }
 
-func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo storage.Driver, systemStorageConfigs []operation.StorageCfg, instanceID int, transactionRepo *transaction.Repo) *uow.Service {
+func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo storage.Driver, systemStorageConfigs []operation.StorageCfg, instanceID int, transactionRepo *transaction.Repo, metricsService *metrics.Service) *uow.Service {
 	return start(uow.New(
 		uow.WithStorages(storages),
 		uow.WithCfg(operationCfg),
@@ -446,6 +455,7 @@ func initUow(storages []storage.Driver, operationCfg *operation.Operation, repo 
 		uow.WithSystemStorageConfigs(systemStorageConfigs),
 		uow.WithInstanceID(instanceID),
 		uow.WithRequestsRepo(transactionRepo),
+		uow.WithMetricsService(metricsService),
 	))
 }
 

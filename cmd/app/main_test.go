@@ -232,6 +232,9 @@ func TestInitOperation(t *testing.T) {
 
 	mockDriver.EXPECT().Name().Return("test-storage").Times(1)
 
+	registry := prometheus.NewRegistry()
+	metricsService := metrics.New(metrics.WithRegisterer(registry))
+
 	messageRepo := &message.Repo{}
 
 	uowService, err := uow.New(
@@ -246,11 +249,9 @@ func TestInitOperation(t *testing.T) {
 			},
 		}),
 		uow.WithRequestsRepo(mockRequestsRepo),
+		uow.WithMetricsService(metricsService),
 	)
 	require.NoError(t, err)
-
-	registry := prometheus.NewRegistry()
-	metricsService := metrics.New(metrics.WithRegisterer(registry))
 
 	srv := initOperation(cfg, connection, uowService, messageRepo, driversMap, 1, metricsService, 10)
 

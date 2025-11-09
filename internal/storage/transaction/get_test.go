@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:funlen // длинный тест
+//nolint:funlen,dupl // длинный тест, схожие тест-кейсы
 func TestRepo_GetAllTransactionsByFields(t *testing.T) {
 	t.Parallel()
 
@@ -200,6 +200,69 @@ func TestBuildWhereConditions(t *testing.T) {
 			sb.SetFlavor(sqlbuilder.PostgreSQL)
 			conditions := buildWhereConditions(sb, tt.fields)
 			require.Equal(t, tt.want, conditions)
+		})
+	}
+}
+
+//nolint:dupl // схожие тест-кейсы
+func TestRepo_GetCountTransactionsByFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		fields    map[string]any
+		setupMock func(mock sqlmock.Sqlmock)
+		want      int
+		wantErr   require.ErrorAssertionFunc
+	}{
+		{
+			name: "positive case: get count transactions by fields succeeds",
+			fields: map[string]any{
+				"status":         storage.TxStatusInProgress,
+				"instance_id":    1,
+				"operation_type": "operation",
+			},
+			setupMock: func(mock sqlmock.Sqlmock) {
+				t.Helper()
+
+				// Мок для основного запроса транзакций
+				mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM transactions\\.transactions WHERE \\(status = \\$1 AND instance_id = \\$2 AND operation_type = \\$3\\)").
+					WithArgs(storage.TxStatusInProgress, 1, "operation").
+					WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+			},
+			want:    1,
+			wantErr: require.NoError,
+		},
+		{
+			name:    "negative case: fields map is empty",
+			fields:  map[string]any{},
+			wantErr: require.Error,
+			want:    0,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				t.Helper()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+
+			tt.setupMock(mock)
+
+			repo := Repo{
+				db: db,
+			}
+
+			count, err := repo.GetCountTransactionsByFields(t.Context(), tt.fields)
+			tt.wantErr(t, err)
+
+			require.Equal(t, tt.want, count)
+
+			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }

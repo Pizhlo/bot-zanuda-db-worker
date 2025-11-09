@@ -2,6 +2,7 @@ package uow
 
 import (
 	"db-worker/internal/config/operation"
+	uowmocks "db-worker/internal/service/uow/mocks"
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/testtransaction"
@@ -21,7 +22,7 @@ func TestNewTx(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		createSvc        func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		createSvc        func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service
 		createRequests   func(storageDriver storage.Driver) map[storage.Driver]*storage.Request
 		rawReq           map[string]any
 		createExpectedTx func(storageDriver storage.Driver) storage.TransactionEditor
@@ -31,8 +32,8 @@ func TestNewTx(t *testing.T) {
 	}{
 		{
 			name: "positive case",
-			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
-				return newTestService(t, systemDriver, userDriver)
+			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			createRequests: func(storageDriver storage.Driver) map[storage.Driver]*storage.Request {
 				return map[storage.Driver]*storage.Request{
@@ -95,8 +96,8 @@ func TestNewTx(t *testing.T) {
 		},
 		{
 			name: "error in NewTransaction",
-			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
-				return newTestService(t, systemDriver, userDriver)
+			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			createRequests: func(storageDriver storage.Driver) map[storage.Driver]*storage.Request {
 				t.Helper()
@@ -120,8 +121,8 @@ func TestNewTx(t *testing.T) {
 		},
 		{
 			name: "error in saveTx",
-			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
-				return newTestService(t, systemDriver, userDriver)
+			createSvc: func(systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			createRequests: func(storageDriver storage.Driver) map[storage.Driver]*storage.Request {
 				return map[storage.Driver]*storage.Request{
@@ -181,8 +182,9 @@ func TestNewTx(t *testing.T) {
 
 			systemDriver := mocks.NewMockDriver(ctrl)
 			userDriver := mocks.NewMockDriver(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
-			svc := tt.createSvc(systemDriver, userDriver)
+			svc := tt.createSvc(systemDriver, userDriver, metricsService)
 
 			tt.setupMocks(t, systemDriver, userDriver)
 
@@ -683,7 +685,7 @@ func TestSaveTx(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service
+		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service
 		createTx   func(t *testing.T, driver storage.Driver) storage.TransactionEditor
 		setupMocks func(t *testing.T, driver *mocks.MockDriver, systemDriver *mocks.MockDriver)
 		checkTx    func(t *testing.T, tx storage.TransactionEditor, driver storage.Driver)
@@ -691,10 +693,10 @@ func TestSaveTx(t *testing.T) {
 	}{
 		{
 			name: "positive case: in progress transaction",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -740,10 +742,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "positive case: success transaction",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -778,10 +780,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "error creating utility transaction",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -802,10 +804,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "error BuildRequests",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -846,10 +848,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "error beginInDriver",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -902,10 +904,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "error execRequests",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -958,10 +960,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "error saveRequests",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -1016,10 +1018,10 @@ func TestSaveTx(t *testing.T) {
 		},
 		{
 			name: "error Commit",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) storage.TransactionEditor {
 				t.Helper()
@@ -1083,8 +1085,9 @@ func TestSaveTx(t *testing.T) {
 
 			driver := mocks.NewMockDriver(ctrl)
 			systemDriver := mocks.NewMockDriver(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
-			svc := tt.createSvc(t, systemDriver, driver)
+			svc := tt.createSvc(t, systemDriver, driver, metricsService)
 
 			tt.setupMocks(t, driver, systemDriver)
 
@@ -1104,7 +1107,7 @@ func TestUpdateTx(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service
+		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service
 		createTx   func(t *testing.T, driver storage.Driver) *storage.Transaction
 		setupMocks func(t *testing.T, driver *mocks.MockDriver, systemDriver *mocks.MockDriver)
 		checkTx    func(t *testing.T, tx *storage.Transaction, driver storage.Driver)
@@ -1112,10 +1115,10 @@ func TestUpdateTx(t *testing.T) {
 	}{
 		{
 			name: "positive case",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) *storage.Transaction {
 				t.Helper()
@@ -1159,10 +1162,10 @@ func TestUpdateTx(t *testing.T) {
 		},
 		{
 			name: "error creating utility transaction",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) *storage.Transaction {
 				t.Helper()
@@ -1183,10 +1186,10 @@ func TestUpdateTx(t *testing.T) {
 		},
 		{
 			name: "error BuildRequests",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) *storage.Transaction {
 				t.Helper()
@@ -1227,10 +1230,10 @@ func TestUpdateTx(t *testing.T) {
 		},
 		{
 			name: "error beginInDriver",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) *storage.Transaction {
 				t.Helper()
@@ -1288,10 +1291,10 @@ func TestUpdateTx(t *testing.T) {
 		},
 		{
 			name: "error execRequests",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) *storage.Transaction {
 				t.Helper()
@@ -1346,10 +1349,10 @@ func TestUpdateTx(t *testing.T) {
 		},
 		{
 			name: "error Commit",
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, driver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, driver)
+				return newTestService(t, systemDriver, driver, metricsService)
 			},
 			createTx: func(t *testing.T, driver storage.Driver) *storage.Transaction {
 				t.Helper()
@@ -1413,8 +1416,9 @@ func TestUpdateTx(t *testing.T) {
 
 			driver := mocks.NewMockDriver(ctrl)
 			systemDriver := mocks.NewMockDriver(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
-			svc := tt.createSvc(t, systemDriver, driver)
+			svc := tt.createSvc(t, systemDriver, driver, metricsService)
 
 			tt.setupMocks(t, driver, systemDriver)
 
