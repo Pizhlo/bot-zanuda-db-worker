@@ -10,10 +10,10 @@ import (
 
 // ExecRequests выполняет запросы к хранилищам.
 // В случае неудачи - откатывает коммит, в случае успеха - коммитит транзакцию.
-func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request) (err error) {
-	tx, err := s.beginTx(ctx, requests)
+func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request, raw map[string]any) (err error) {
+	tx, err := s.newTx(ctx, requests, raw)
 	if err != nil {
-		return fmt.Errorf("error begin transaction: %w", err)
+		return fmt.Errorf("error creating transaction: %w", err)
 	}
 
 	if tx == nil {
@@ -51,6 +51,50 @@ func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]
 		"transaction_status":        tx.Status(),
 	}).Info("executing requests")
 
+	if err := s.execTx(ctx, tx); err != nil {
+		return fmt.Errorf("error executing transaction: %w", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"transaction_id":            tx.ID(),
+		"operation":                 s.cfg.Name,
+		"service":                   "uow",
+		"transaction_requests_num":  len(tx.Requests()),
+		"transaction_failed_driver": tx.FailedDriverName(),
+		"transaction_error":         tx.Error(),
+		"transaction_status":        tx.Status(),
+	}).Info("all drivers processed requests successfully")
+
+	return nil
+}
+
+// execTx начинает транзакцию в пользовательских хранилищах и выполняет запросы.
+// Транзакция должна быть в статусе in progress.
+// Если запрос не удалось выполнить, то устанавливает статус failed и возвращает ошибку.
+// Если запросы не удалось выполнить, то откатывает транзакцию.
+func (s *Service) execTx(ctx context.Context, tx storage.TransactionEditor) error {
+	logrus.WithFields(logrus.Fields{
+		"transaction_id":            tx.ID(),
+		"operation":                 s.cfg.Name,
+		"service":                   "uow",
+		"transaction_requests_num":  len(tx.Requests()),
+		"transaction_failed_driver": tx.FailedDriverName(),
+		"transaction_error":         tx.Error(),
+		"transaction_status":        tx.Status(),
+	}).Info("executing transaction")
+
+	if !tx.IsInProgress() {
+		return fmt.Errorf("transaction status not equal to: %q. Real status: %q", storage.TxStatusInProgress, tx.Status())
+	}
+
+	// начинаем транзакцию в пользовательских хранилищах
+	for driver := range tx.Requests() {
+		err := s.beginInDriver(ctx, tx, driver)
+		if err != nil {
+			return fmt.Errorf("error beginning transaction: %+v", err)
+		}
+	}
+
 	if err := s.execRequests(ctx, tx); err != nil {
 		return fmt.Errorf("error executing requests: %w", err)
 	}
@@ -67,7 +111,7 @@ func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]
 		"transaction_failed_driver": tx.FailedDriverName(),
 		"transaction_error":         tx.Error(),
 		"transaction_status":        tx.Status(),
-	}).Info("all drivers processed requests successfully")
+	}).Info("transaction executed successfully")
 
 	return nil
 }

@@ -20,6 +20,7 @@ func TestExecRequests(t *testing.T) {
 	tests := []struct {
 		name     string
 		setupSvc func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		rawReq   map[string]any
 		requests func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request
 		wantErr  require.ErrorAssertionFunc
 	}{
@@ -58,6 +59,9 @@ func TestExecRequests(t *testing.T) {
 						Args: []any{"1"},
 					},
 				}
+			},
+			rawReq: map[string]any{
+				"id": 1,
 			},
 			wantErr: require.NoError,
 		},
@@ -235,7 +239,7 @@ func TestExecRequests(t *testing.T) {
 			systemDriver := mocks.NewMockDriver(ctrl)
 			userDriver := mocks.NewMockDriver(ctrl)
 
-			err := tt.setupSvc(t, systemDriver, userDriver).ExecRequests(t.Context(), tt.requests(t, userDriver))
+			err := tt.setupSvc(t, systemDriver, userDriver).ExecRequests(t.Context(), tt.requests(t, userDriver), tt.rawReq)
 			tt.wantErr(t, err)
 		})
 	}
@@ -266,6 +270,9 @@ func TestCommit(t *testing.T) {
 					},
 					1,
 					[]byte{0x1, 0x2, 0x3},
+					map[string]any{
+						"id": 1,
+					},
 				)
 
 				require.NoError(t, err)

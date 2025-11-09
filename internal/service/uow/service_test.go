@@ -4,6 +4,7 @@ import (
 	"context"
 	"db-worker/internal/config/operation"
 	builder_pkg "db-worker/internal/service/builder"
+	uowmocks "db-worker/internal/service/uow/mocks"
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/mocks"
 	"sync"
@@ -233,13 +234,308 @@ func TestNew(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		setupOpts func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option
+		setupOpts func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option
 		wantErr   require.ErrorAssertionFunc
-		want      func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service)
+		want      func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service)
 	}{
 		{
 			name: "positive case",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+				t.Helper()
+
+				mock, ok := driver.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+						},
+					}),
+					WithStorages([]storage.Driver{mock}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithRequestsRepo(requestsRepo),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+				t.Helper()
+
+				// Проверяем только нужные поля, а не всю структуру
+				assert.NotNil(t, got)
+				assert.NotNil(t, got.cfg)
+				assert.Equal(t, "test-storage", got.cfg.Storages[0].Name)
+				assert.Equal(t, 1, got.instanceID)
+				assert.Equal(t, systemDB, got.storage)
+				assert.NotNil(t, got.userStoragesMap)
+				assert.NotNil(t, got.userDriversMap)
+				assert.Contains(t, got.userStoragesMap, "test-storage")
+				assert.Contains(t, got.userDriversMap, "test-storage")
+				assert.Equal(t, requestsRepo, got.requestsRepo)
+			},
+			wantErr: require.NoError,
+		},
+		{
+			name: "negative case: system storage configs are required",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+				t.Helper()
+
+				mock, ok := driver.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+						},
+					}),
+					WithStorages([]storage.Driver{mock}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithRequestsRepo(requestsRepo),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+				t.Helper()
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: cfg is nil",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+				t.Helper()
+
+				mock, ok := driver.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithStorages([]storage.Driver{driver}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithRequestsRepo(requestsRepo),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+				t.Helper()
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: storages are required",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+				t.Helper()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+						},
+					}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithRequestsRepo(requestsRepo),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+				t.Helper()
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: storage is required",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+				t.Helper()
+
+				mock, ok := driver.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+						},
+					}),
+					WithInstanceID(1),
+					WithStorages([]storage.Driver{driver}),
+					WithRequestsRepo(requestsRepo),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+				t.Helper()
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: storage not found",
+			setupOpts: func(t *testing.T, userStorage storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+				t.Helper()
+
+				systemDB.EXPECT().Name().Return("system-db").AnyTimes()
+
+				mock, ok := userStorage.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+							{Name: "test-storage-2"},
+						},
+					}),
+					WithStorages([]storage.Driver{userStorage}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithRequestsRepo(requestsRepo),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+				t.Helper()
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: requests repo is nil",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
 				t.Helper()
 
 				mock, ok := driver.(*mocks.MockDriver)
@@ -284,73 +580,7 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
-				t.Helper()
-
-				// Проверяем только нужные поля, а не всю структуру
-				assert.NotNil(t, got)
-				assert.NotNil(t, got.cfg)
-				assert.Equal(t, "test-storage", got.cfg.Storages[0].Name)
-				assert.Equal(t, 1, got.instanceID)
-				assert.Equal(t, systemDB, got.storage)
-				assert.NotNil(t, got.userStoragesMap)
-				assert.NotNil(t, got.userDriversMap)
-				assert.Contains(t, got.userStoragesMap, "test-storage")
-				assert.Contains(t, got.userDriversMap, "test-storage")
-			},
-			wantErr: require.NoError,
-		},
-		{
-			name: "negative case: cfg is nil",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option {
-				t.Helper()
-
-				return []option{
-					WithStorages([]storage.Driver{}),
-				}
-			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
-				t.Helper()
-			},
-			wantErr: require.Error,
-		},
-		{
-			name: "negative case: storages are required",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver) []option {
-				t.Helper()
-
-				return []option{
-					WithCfg(&operation.Operation{}),
-				}
-			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
-				t.Helper()
-			},
-			wantErr: require.Error,
-		},
-		{
-			name: "negative case: storage not found",
-			setupOpts: func(t *testing.T, userStorage storage.Driver, systemDB *mocks.MockDriver) []option {
-				t.Helper()
-
-				systemDB.EXPECT().Name().Return("system-db").AnyTimes()
-
-				mock, ok := userStorage.(*mocks.MockDriver)
-				require.True(t, ok)
-
-				mock.EXPECT().Name().Return("test-storage").AnyTimes()
-
-				return []option{
-					WithCfg(&operation.Operation{
-						Storages: []operation.StorageCfg{
-							{Name: "test-storage"},
-							{Name: "test-storage-2"},
-						},
-					}),
-					WithStorages([]storage.Driver{userStorage}),
-				}
-			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
@@ -365,14 +595,15 @@ func TestNew(t *testing.T) {
 			defer ctrl.Finish()
 
 			systemDB := mocks.NewMockDriver(ctrl)
+			requestsRepo := uowmocks.NewMockrequestsRepo(ctrl)
 
 			driver := mocks.NewMockDriver(ctrl)
-			opts := tt.setupOpts(t, driver, systemDB)
+			opts := tt.setupOpts(t, driver, systemDB, requestsRepo)
 
 			got, err := New(opts...)
 			tt.wantErr(t, err)
 
-			tt.want(t, driver, systemDB, got)
+			tt.want(t, driver, systemDB, requestsRepo, got)
 		})
 	}
 }

@@ -77,7 +77,7 @@ func TestReadMessages(t *testing.T) {
 			// AnyTimes - потому что мы не знаем, в какой момент будет закрыть канал
 			mockUow.EXPECT().StoragesMap().Return(map[string]uow.DriversMap{}).AnyTimes()
 			mockUow.EXPECT().BuildRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-			mockUow.EXPECT().ExecRequests(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockUow.EXPECT().ExecRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			configurator1.EXPECT().Type().Return(operation.StorageTypePostgres).AnyTimes()
 			configurator1.EXPECT().Name().Return("test-storage").AnyTimes()
@@ -164,7 +164,7 @@ func TestProcessMessage(t *testing.T) {
 
 				mockUow.EXPECT().StoragesMap().Return(map[string]uow.DriversMap{}).Times(1)
 				mockUow.EXPECT().BuildRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
-				mockUow.EXPECT().ExecRequests(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+				mockUow.EXPECT().ExecRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 				messageRepo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, messages []message.Message) error {
 					for _, msg := range messages {
@@ -337,7 +337,7 @@ func TestProcessMessage(t *testing.T) {
 
 				mockUow.EXPECT().StoragesMap().Return(map[string]uow.DriversMap{}).Times(1)
 				mockUow.EXPECT().BuildRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
-				mockUow.EXPECT().ExecRequests(gomock.Any(), gomock.Any()).Return(errors.New("error")).Times(1)
+				mockUow.EXPECT().ExecRequests(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("error")).Times(1)
 
 				messageRepo.EXPECT().CreateMany(gomock.Any(), gomock.Any()).Return(nil).Times(1).Do(func(ctx context.Context, messages []message.Message) error {
 					for _, msg := range messages {

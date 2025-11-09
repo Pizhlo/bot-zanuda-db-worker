@@ -1,6 +1,7 @@
 package uow
 
 import (
+	"context"
 	"db-worker/internal/config/operation"
 	builder_pkg "db-worker/internal/service/builder"
 	"db-worker/internal/storage"
@@ -11,7 +12,8 @@ import (
 // Service - сервис для работы с хранилищами.
 // Осуществляет операции с хранилищами транзакционно, следит за консистентностью данных.
 type Service struct {
-	cfg *operation.Operation
+	cfg          *operation.Operation
+	requestsRepo requestsRepo
 
 	userStoragesMap map[string]storage.Driver // драйвера для работы с хранилищами
 	userDriversMap  map[string]DriversMap     // поле для сопоставления драйвера хранения и конфигурации
@@ -27,6 +29,15 @@ type Service struct {
 	requestsDriversMap map[string]DriversMap // системные хранилища, куда сохраняются запросы
 
 	systemStorageConfigs []operation.StorageCfg // конфигурация системных хранилищ (кэш, БД)
+}
+
+//go:generate mockgen -source=service.go -destination=mocks/mocks.go -package=mocks
+type requestsRepo interface {
+	// GetAllTransactionsByFields получает все транзакции, удовлетворяющие условию.
+	// fields - мапа с полями и значениями для фильтрации.
+	GetAllTransactionsByFields(ctx context.Context, fields map[string]any) ([]storage.TransactionModel, error)
+	// UpdateStatusMany обновляет статус транзакций по айдишникам.
+	UpdateStatusMany(ctx context.Context, ids []string, status string, errMsg string) error
 }
 
 // DriversMap - структура, связывающая драйвер хранилища и его конфигурацию.
@@ -86,6 +97,13 @@ func WithSystemStorageConfigs(configs []operation.StorageCfg) option {
 	}
 }
 
+// WithRequestsRepo устанавливает репозиторий для работы с запросами.
+func WithRequestsRepo(repo requestsRepo) option {
+	return func(s *Service) {
+		s.requestsRepo = repo
+	}
+}
+
 // New создает новый экземпляр сервиса.
 // Возможные ошибки:
 //   - cfg is required - не передан конфиг
@@ -121,6 +139,10 @@ func New(opts ...option) (*Service, error) {
 
 	if len(s.systemStorageConfigs) == 0 {
 		return nil, errors.New("system storage configs are required")
+	}
+
+	if s.requestsRepo == nil {
+		return nil, errors.New("requests repo is required")
 	}
 
 	s.userDriversMap = make(map[string]DriversMap)

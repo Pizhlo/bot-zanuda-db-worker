@@ -47,6 +47,8 @@ type TransactionEditor interface {
 	OriginalTx() TransactionEditor
 	// FailedDriverName возвращает название "сломанного" драйвера транзакции.
 	FailedDriverName() string
+	// RawReq возвращает raw запросы транзакции.
+	RawReq() map[string]any
 }
 
 // Transaction - реализация сущности транзакции.
@@ -57,7 +59,8 @@ type Transaction struct {
 	// это нужно, чтобы остальные драйвера могли откатиться.
 	failedDriver Driver
 	// если транзакция не успешна, то в этом поле будет ошибка, которая произошла при выполнении транзакции.
-	err error
+	err    error
+	rawReq map[string]any
 
 	requests map[Driver]*Request
 	begun    map[Driver]struct{} // драйвера, в которых транзакция была успешно начата.
@@ -81,7 +84,7 @@ const (
 
 // NewTransaction создает новую транзакцию.
 // Требуется передать статус, запросы, экземпляр приложения и хеш операции.
-func NewTransaction(requests map[Driver]*Request, instanceID int, operationHash []byte) (*Transaction, error) {
+func NewTransaction(requests map[Driver]*Request, instanceID int, operationHash []byte, rawReq map[string]any) (*Transaction, error) {
 	if len(requests) == 0 {
 		return nil, fmt.Errorf("requests not provided")
 	}
@@ -100,7 +103,22 @@ func NewTransaction(requests map[Driver]*Request, instanceID int, operationHash 
 		begun:         make(map[Driver]struct{}),
 		instanceID:    instanceID,
 		operationHash: operationHash,
+		rawReq:        rawReq,
 	}, nil
+}
+
+// NewTransactionFromModel создает новую транзакцию из модели.
+func NewTransactionFromModel(model *TransactionModel) *Transaction {
+	return &Transaction{
+		id:            model.ID,
+		status:        txStatus(model.Status),
+		err:           ErrEmpty,
+		begun:         make(map[Driver]struct{}),
+		instanceID:    model.InstanceID,
+		operationHash: model.OperationHash,
+		rawReq:        model.Data,
+		requests:      make(map[Driver]*Request),
+	}
 }
 
 // SetFailedDriver устанавливает "сломанный" драйвер транзакции.
@@ -159,7 +177,7 @@ func (tx *Transaction) Requests() map[Driver]*Request {
 // SaveRequests сохраняет запросы транзакции.
 // Не реализовано для основной транакзции, только для служебной.
 func (tx *Transaction) SaveRequests(requests map[Driver]*Request) {
-	// not implemented
+	tx.requests = requests
 }
 
 // ID возвращает идентификатор транзакции.
@@ -176,6 +194,11 @@ func (tx *Transaction) Error() error {
 // ErrorString возвращает строковое представление ошибки транзакции.
 func (tx *Transaction) ErrorString() string {
 	return tx.err.Error()
+}
+
+// RawReq возвращает raw запросы транзакции.
+func (tx *Transaction) RawReq() map[string]any {
+	return tx.rawReq
 }
 
 // FailedDriver возвращает "сломанный" драйвер транзакции.
@@ -441,4 +464,11 @@ func (ux *utilityTransaction) FailedDriverName() string {
 	}
 
 	return failedDriverName
+}
+
+func (ux *utilityTransaction) RawReq() map[string]any {
+	ux.mu.RLock()
+	defer ux.mu.RUnlock()
+
+	return ux.originalTx.rawReq
 }
