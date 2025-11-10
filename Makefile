@@ -46,9 +46,21 @@ test:
 	@echo "> successfully finished"
 
 all:	
+	@make check
 	@make lint
 	@make test
 	@make build
+
+check:
+	@echo "> checking..."
+	@make check-go-mod
+	go vet ./...
+	@echo "> check successfully finished"
+
+check-go-mod:
+	@echo "> checking go.mod..."
+	go mod verify
+	@echo "> go.mod checked successfully"
 
 build:
 	@echo " > building..."
@@ -66,4 +78,4 @@ run:
 	@make build
 	$(APP_EXECUTABLE_DIR)/app
 
-.PHONY: mocks swag lint test all run init install-linters
+.PHONY: mocks swag lint test all run init install-linters check check-go-mod
