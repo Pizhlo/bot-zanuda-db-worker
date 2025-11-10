@@ -55,12 +55,18 @@ check:
 	@echo "> checking..."
 	@make check-go-mod
 	go vet ./...
+	@make check-test-files
 	@echo "> check successfully finished"
 
 check-go-mod:
 	@echo "> checking go.mod..."
 	go mod verify
 	@echo "> go.mod checked successfully"
+
+check-test-files:
+	@echo "> checking test files..."
+	./scripts/check-test-files.sh $$(go list -f '{{.Dir}}' ./...)
+	@echo "> test files checked successfully"
 
 build:
 	@echo " > building..."
