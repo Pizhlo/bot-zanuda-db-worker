@@ -228,19 +228,19 @@ func (m *mockStorage) FinishTx(ctx context.Context, _ string) error {
 	return m.finishTxError
 }
 
-//nolint:funlen // много тест-кейсов
+//nolint:funlen,dupl // много тест-кейсов, схожие тест-кейсы
 func TestNew(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name      string
-		setupOpts func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option
+		setupOpts func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option
 		wantErr   require.ErrorAssertionFunc
-		want      func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service)
+		want      func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service)
 	}{
 		{
 			name: "positive case",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				mock, ok := driver.(*mocks.MockDriver)
@@ -258,6 +258,7 @@ func TestNew(t *testing.T) {
 					WithStorage(systemDB),
 					WithInstanceID(1),
 					WithRequestsRepo(requestsRepo),
+					WithMetricsService(metricsService),
 					WithSystemStorageConfigs([]operation.StorageCfg{
 						{
 							Name:          StorageNameForTransactionsTable,
@@ -286,7 +287,7 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 
 				// Проверяем только нужные поля, а не всю структуру
@@ -300,12 +301,13 @@ func TestNew(t *testing.T) {
 				assert.Contains(t, got.userStoragesMap, "test-storage")
 				assert.Contains(t, got.userDriversMap, "test-storage")
 				assert.Equal(t, requestsRepo, got.requestsRepo)
+				assert.Equal(t, metricsService, got.metricsService)
 			},
 			wantErr: require.NoError,
 		},
 		{
 			name: "negative case: system storage configs are required",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				mock, ok := driver.(*mocks.MockDriver)
@@ -323,16 +325,17 @@ func TestNew(t *testing.T) {
 					WithStorage(systemDB),
 					WithInstanceID(1),
 					WithRequestsRepo(requestsRepo),
+					WithMetricsService(metricsService),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: cfg is nil",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				mock, ok := driver.(*mocks.MockDriver)
@@ -345,6 +348,7 @@ func TestNew(t *testing.T) {
 					WithStorage(systemDB),
 					WithInstanceID(1),
 					WithRequestsRepo(requestsRepo),
+					WithMetricsService(metricsService),
 					WithSystemStorageConfigs([]operation.StorageCfg{
 						{
 							Name:          StorageNameForTransactionsTable,
@@ -373,14 +377,14 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: storages are required",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				return []option{
@@ -392,6 +396,7 @@ func TestNew(t *testing.T) {
 					WithStorage(systemDB),
 					WithInstanceID(1),
 					WithRequestsRepo(requestsRepo),
+					WithMetricsService(metricsService),
 					WithSystemStorageConfigs([]operation.StorageCfg{
 						{
 							Name:          StorageNameForTransactionsTable,
@@ -420,14 +425,14 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: storage is required",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				mock, ok := driver.(*mocks.MockDriver)
@@ -444,6 +449,7 @@ func TestNew(t *testing.T) {
 					WithInstanceID(1),
 					WithStorages([]storage.Driver{driver}),
 					WithRequestsRepo(requestsRepo),
+					WithMetricsService(metricsService),
 					WithSystemStorageConfigs([]operation.StorageCfg{
 						{
 							Name:          StorageNameForTransactionsTable,
@@ -472,14 +478,14 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: storage not found",
-			setupOpts: func(t *testing.T, userStorage storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, userStorage storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				systemDB.EXPECT().Name().Return("system-db").AnyTimes()
@@ -500,6 +506,7 @@ func TestNew(t *testing.T) {
 					WithStorage(systemDB),
 					WithInstanceID(1),
 					WithRequestsRepo(requestsRepo),
+					WithMetricsService(metricsService),
 					WithSystemStorageConfigs([]operation.StorageCfg{
 						{
 							Name:          StorageNameForTransactionsTable,
@@ -528,14 +535,14 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
 		},
 		{
 			name: "negative case: requests repo is nil",
-			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo) []option {
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
 				t.Helper()
 
 				mock, ok := driver.(*mocks.MockDriver)
@@ -552,6 +559,7 @@ func TestNew(t *testing.T) {
 					WithStorages([]storage.Driver{mock}),
 					WithStorage(systemDB),
 					WithInstanceID(1),
+					WithMetricsService(metricsService),
 					WithSystemStorageConfigs([]operation.StorageCfg{
 						{
 							Name:          StorageNameForTransactionsTable,
@@ -580,7 +588,60 @@ func TestNew(t *testing.T) {
 					}),
 				}
 			},
-			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, got *Service) {
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
+				t.Helper()
+			},
+			wantErr: require.Error,
+		},
+		{
+			name: "negative case: requests repo is nil",
+			setupOpts: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter) []option {
+				t.Helper()
+
+				mock, ok := driver.(*mocks.MockDriver)
+				require.True(t, ok)
+
+				mock.EXPECT().Name().Return("test-storage").AnyTimes()
+
+				return []option{
+					WithCfg(&operation.Operation{
+						Storages: []operation.StorageCfg{
+							{Name: "test-storage"},
+						},
+					}),
+					WithStorages([]storage.Driver{mock}),
+					WithStorage(systemDB),
+					WithInstanceID(1),
+					WithRequestsRepo(requestsRepo),
+					WithSystemStorageConfigs([]operation.StorageCfg{
+						{
+							Name:          StorageNameForTransactionsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.transactions",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+						{
+							Name:          StorageNameForRequestsTable,
+							Type:          operation.StorageTypePostgres,
+							Table:         "transactions.requests",
+							Host:          "localhost",
+							Port:          5432,
+							User:          "user",
+							Password:      "password",
+							DBName:        "test-db",
+							InsertTimeout: 1000,
+							ReadTimeout:   1000,
+						},
+					}),
+				}
+			},
+			want: func(t *testing.T, driver storage.Driver, systemDB *mocks.MockDriver, requestsRepo *uowmocks.MockrequestsRepo, metricsService *uowmocks.MocktxCounter, got *Service) {
 				t.Helper()
 			},
 			wantErr: require.Error,
@@ -596,14 +657,15 @@ func TestNew(t *testing.T) {
 
 			systemDB := mocks.NewMockDriver(ctrl)
 			requestsRepo := uowmocks.NewMockrequestsRepo(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
 			driver := mocks.NewMockDriver(ctrl)
-			opts := tt.setupOpts(t, driver, systemDB, requestsRepo)
+			opts := tt.setupOpts(t, driver, systemDB, requestsRepo, metricsService)
 
 			got, err := New(opts...)
 			tt.wantErr(t, err)
 
-			tt.want(t, driver, systemDB, requestsRepo, got)
+			tt.want(t, driver, systemDB, requestsRepo, metricsService, got)
 		})
 	}
 }
@@ -1099,11 +1161,12 @@ func TestMapStoragesConfig(t *testing.T) {
 	}
 }
 
-func newTestService(t *testing.T, systemDriver storage.Driver, userDriver storage.Driver) *Service {
+func newTestService(t *testing.T, systemDriver storage.Driver, userDriver storage.Driver, metricsService *uowmocks.MocktxCounter) *Service {
 	t.Helper()
 
 	return &Service{
-		instanceID: 1,
+		metricsService: metricsService,
+		instanceID:     1,
 		cfg: &operation.Operation{
 			Name: "test-operation",
 			Hash: []byte{0x1, 0x2, 0x3},

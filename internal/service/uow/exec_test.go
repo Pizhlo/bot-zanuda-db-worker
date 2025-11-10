@@ -2,6 +2,7 @@ package uow
 
 import (
 	"db-worker/internal/config/operation"
+	uowmocks "db-worker/internal/service/uow/mocks"
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/testtransaction"
@@ -19,14 +20,14 @@ func TestExecRequests(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		setupSvc func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		setupSvc func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service
 		rawReq   map[string]any
 		requests func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request
 		wantErr  require.ErrorAssertionFunc
 	}{
 		{
 			name: "positive case",
-			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				// системное хранилище может дергаться многократно в ходе сохранений/обновлений
@@ -48,7 +49,20 @@ func TestExecRequests(t *testing.T) {
 				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return newTestService(t, systemDriver, userDriver)
+				metricsService.EXPECT().AddTotalTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddSuccessTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().DecrementInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
 				t.Helper()
@@ -67,7 +81,7 @@ func TestExecRequests(t *testing.T) {
 		},
 		{
 			name: "error case: exec error",
-			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				// составляем запросы для сохранения пользовательских запросов, принадлежащих транзакции
@@ -89,6 +103,19 @@ func TestExecRequests(t *testing.T) {
 				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
+				metricsService.EXPECT().AddTotalTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddFailedTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().DecrementInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test-operation",
@@ -102,7 +129,8 @@ func TestExecRequests(t *testing.T) {
 							},
 						},
 					},
-					storage: systemDriver,
+					storage:        systemDriver,
+					metricsService: metricsService,
 				}
 			},
 			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
@@ -122,7 +150,7 @@ func TestExecRequests(t *testing.T) {
 		},
 		{
 			name: "error case: commit error",
-			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
@@ -138,6 +166,19 @@ func TestExecRequests(t *testing.T) {
 				userDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				userDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
+				metricsService.EXPECT().AddTotalTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddFailedTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().DecrementInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+
 				return &Service{
 					cfg: &operation.Operation{
 						Name: "test-operation",
@@ -151,7 +192,8 @@ func TestExecRequests(t *testing.T) {
 							},
 						},
 					},
-					storage: systemDriver,
+					storage:        systemDriver,
+					metricsService: metricsService,
 				}
 			},
 			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
@@ -171,7 +213,7 @@ func TestExecRequests(t *testing.T) {
 		},
 		{
 			name: "error case: finish tx error",
-			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			setupSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
@@ -210,7 +252,23 @@ func TestExecRequests(t *testing.T) {
 				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				systemDriver.EXPECT().FinishTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return newTestService(t, systemDriver, userDriver)
+				metricsService.EXPECT().AddTotalTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddSuccessTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().AddFailedTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+				metricsService.EXPECT().DecrementInProgressTransactions(gomock.Any()).Do(func(count int) {
+					assert.Equal(t, 1, count)
+				}).AnyTimes()
+
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			requests: func(t *testing.T, mock *mocks.MockDriver) map[storage.Driver]*storage.Request {
 				t.Helper()
@@ -238,8 +296,9 @@ func TestExecRequests(t *testing.T) {
 
 			systemDriver := mocks.NewMockDriver(ctrl)
 			userDriver := mocks.NewMockDriver(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
-			err := tt.setupSvc(t, systemDriver, userDriver).ExecRequests(t.Context(), tt.requests(t, userDriver), tt.rawReq)
+			err := tt.setupSvc(t, systemDriver, userDriver, metricsService).ExecRequests(t.Context(), tt.requests(t, userDriver), tt.rawReq)
 			tt.wantErr(t, err)
 		})
 	}
@@ -251,7 +310,7 @@ func TestCommit(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service
+		createSvc  func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service
 		createTx   func(t *testing.T, userDriver *mocks.MockDriver) storage.TransactionEditor
 		wantStatus string
 		wantErr    require.ErrorAssertionFunc
@@ -289,7 +348,7 @@ func TestCommit(t *testing.T) {
 				)
 			},
 			wantStatus: string(storage.TxStatusSuccess),
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				// commit в пользовательском хранилище
@@ -302,7 +361,7 @@ func TestCommit(t *testing.T) {
 				systemDriver.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil)
 
-				return newTestService(t, systemDriver, userDriver)
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			wantErr: require.NoError,
 		},
@@ -322,10 +381,10 @@ func TestCommit(t *testing.T) {
 				)
 			},
 			wantStatus: string(storage.TxStatusSuccess),
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
-				return newTestService(t, systemDriver, userDriver)
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
@@ -348,7 +407,7 @@ func TestCommit(t *testing.T) {
 				)
 			},
 			wantStatus: string(storage.TxStatusFailed),
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				userDriver.EXPECT().Name().Return("test-storage").AnyTimes()
@@ -363,7 +422,7 @@ func TestCommit(t *testing.T) {
 				systemDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				systemDriver.EXPECT().Rollback(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-				return newTestService(t, systemDriver, userDriver)
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
@@ -386,12 +445,12 @@ func TestCommit(t *testing.T) {
 				)
 			},
 			wantStatus: string(storage.TxStatusSuccess),
-			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver) *Service {
+			createSvc: func(t *testing.T, systemDriver *mocks.MockDriver, userDriver *mocks.MockDriver, metricsService *uowmocks.MocktxCounter) *Service {
 				t.Helper()
 
 				userDriver.EXPECT().Commit(gomock.Any(), gomock.Any()).Return(nil)
 
-				return newTestService(t, systemDriver, userDriver)
+				return newTestService(t, systemDriver, userDriver, metricsService)
 			},
 			wantErr: require.ErrorAssertionFunc(func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
@@ -409,10 +468,11 @@ func TestCommit(t *testing.T) {
 
 			systemDriver := mocks.NewMockDriver(ctrl)
 			userDriver := mocks.NewMockDriver(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
 			tx := tt.createTx(t, userDriver)
 
-			err := tt.createSvc(t, systemDriver, userDriver).Commit(t.Context(), tx)
+			err := tt.createSvc(t, systemDriver, userDriver, metricsService).Commit(t.Context(), tx)
 			tt.wantErr(t, err)
 
 			assert.Equal(t, tt.wantStatus, tx.Status())

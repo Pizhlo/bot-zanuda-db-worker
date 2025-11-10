@@ -12,8 +12,9 @@ import (
 // Service - сервис для работы с хранилищами.
 // Осуществляет операции с хранилищами транзакционно, следит за консистентностью данных.
 type Service struct {
-	cfg          *operation.Operation
-	requestsRepo requestsRepo
+	cfg            *operation.Operation
+	requestsRepo   requestsRepo
+	metricsService txCounter // сервис для работы с метриками
 
 	userStoragesMap map[string]storage.Driver // драйвера для работы с хранилищами
 	userDriversMap  map[string]DriversMap     // поле для сопоставления драйвера хранения и конфигурации
@@ -31,11 +32,34 @@ type Service struct {
 	systemStorageConfigs []operation.StorageCfg // конфигурация системных хранилищ (кэш, БД)
 }
 
+type txCounter interface {
+	txAdder
+	txDecrementer
+}
+
+type txAdder interface {
+	AddTotalTransactions(count int)
+	AddInProgressTransactions(count int)
+	AddFailedTransactions(count int)
+	AddCanceledTransactions(count int)
+	AddSuccessTransactions(count int)
+}
+
+type txDecrementer interface {
+	DecrementTotalTransactions(count int)
+	DecrementInProgressTransactions(count int)
+	DecrementFailedTransactions(count int)
+	DecrementCanceledTransactions(count int)
+	DecrementSuccessTransactions(count int)
+}
+
 //go:generate mockgen -source=service.go -destination=mocks/mocks.go -package=mocks
 type requestsRepo interface {
 	// GetAllTransactionsByFields получает все транзакции, удовлетворяющие условию.
 	// fields - мапа с полями и значениями для фильтрации.
 	GetAllTransactionsByFields(ctx context.Context, fields map[string]any) ([]storage.TransactionModel, error)
+	// GetCountTransactionsByFields получает количество транзакций, удовлетворяющих условию.
+	GetCountTransactionsByFields(ctx context.Context, fields map[string]any) (int, error)
 	// UpdateStatusMany обновляет статус транзакций по айдишникам.
 	UpdateStatusMany(ctx context.Context, ids []string, status string, errMsg string) error
 }
@@ -104,6 +128,13 @@ func WithRequestsRepo(repo requestsRepo) option {
 	}
 }
 
+// WithMetricsService устанавливает сервис для работы с метриками.
+func WithMetricsService(metricsService txCounter) option {
+	return func(s *Service) {
+		s.metricsService = metricsService
+	}
+}
+
 // New создает новый экземпляр сервиса.
 // Возможные ошибки:
 //   - cfg is required - не передан конфиг
@@ -143,6 +174,10 @@ func New(opts ...option) (*Service, error) {
 
 	if s.requestsRepo == nil {
 		return nil, errors.New("requests repo is required")
+	}
+
+	if s.metricsService == nil {
+		return nil, errors.New("metrics service is required")
 	}
 
 	s.userDriversMap = make(map[string]DriversMap)

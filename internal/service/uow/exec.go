@@ -10,6 +10,8 @@ import (
 
 // ExecRequests выполняет запросы к хранилищам.
 // В случае неудачи - откатывает коммит, в случае успеха - коммитит транзакцию.
+//
+//nolint:funlen // цельная логика работы, разбивать проблематично. +многострочные логи
 func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]*storage.Request, raw map[string]any) (err error) {
 	tx, err := s.newTx(ctx, requests, raw)
 	if err != nil {
@@ -19,6 +21,9 @@ func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]
 	if tx == nil {
 		return fmt.Errorf("transaction is nil")
 	}
+
+	s.addTotalTransactions(1)
+	s.addInProgressTransactions(1)
 
 	defer func() {
 		finishErr := s.finishTx(ctx, tx)
@@ -41,6 +46,14 @@ func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]
 		}
 	}()
 
+	defer func() {
+		if err != nil {
+			s.addFailedTransactions(1)
+		} else {
+			s.addSuccessTransactions(1)
+		}
+	}()
+
 	logrus.WithFields(logrus.Fields{
 		"transaction_id":            tx.ID(),
 		"operation":                 s.cfg.Name,
@@ -51,8 +64,10 @@ func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]
 		"transaction_status":        tx.Status(),
 	}).Info("executing requests")
 
-	if err := s.execTx(ctx, tx); err != nil {
-		return fmt.Errorf("error executing transaction: %w", err)
+	// здесь будут изменены метрики транзакций
+	if err = s.execTx(ctx, tx); err != nil {
+		err = fmt.Errorf("error executing transaction: %w", err)
+		return
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -65,14 +80,14 @@ func (s *Service) ExecRequests(ctx context.Context, requests map[storage.Driver]
 		"transaction_status":        tx.Status(),
 	}).Info("all drivers processed requests successfully")
 
-	return nil
+	return
 }
 
 // execTx начинает транзакцию в пользовательских хранилищах и выполняет запросы.
 // Транзакция должна быть в статусе in progress.
 // Если запрос не удалось выполнить, то устанавливает статус failed и возвращает ошибку.
 // Если запросы не удалось выполнить, то откатывает транзакцию.
-func (s *Service) execTx(ctx context.Context, tx storage.TransactionEditor) error {
+func (s *Service) execTx(ctx context.Context, tx storage.TransactionEditor) (err error) {
 	logrus.WithFields(logrus.Fields{
 		"transaction_id":            tx.ID(),
 		"operation":                 s.cfg.Name,
@@ -89,17 +104,17 @@ func (s *Service) execTx(ctx context.Context, tx storage.TransactionEditor) erro
 
 	// начинаем транзакцию в пользовательских хранилищах
 	for driver := range tx.Requests() {
-		err := s.beginInDriver(ctx, tx, driver)
+		err = s.beginInDriver(ctx, tx, driver)
 		if err != nil {
 			return fmt.Errorf("error beginning transaction: %+v", err)
 		}
 	}
 
-	if err := s.execRequests(ctx, tx); err != nil {
+	if err = s.execRequests(ctx, tx); err != nil {
 		return fmt.Errorf("error executing requests: %w", err)
 	}
 
-	if err := s.Commit(ctx, tx); err != nil {
+	if err = s.Commit(ctx, tx); err != nil {
 		return fmt.Errorf("error commit transaction: %w", err)
 	}
 

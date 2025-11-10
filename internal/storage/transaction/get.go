@@ -45,7 +45,7 @@ func (r *Repo) GetAllTransactionsByFields(ctx context.Context, fields map[string
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			logrus.WithError(err).Error("error closing rows")
+			logrus.WithError(err).Error("GetAllTransactionsByFields: error closing rows")
 		}
 	}()
 
@@ -97,7 +97,7 @@ func (r *Repo) getRequestsByTransactionID(ctx context.Context, transactionID str
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			logrus.WithError(err).Error("error closing rows")
+			logrus.WithError(err).Error("getRequestsByTransactionID: error closing rows")
 		}
 	}()
 
@@ -134,4 +134,44 @@ func buildWhereConditions(sb *sqlbuilder.SelectBuilder, fields map[string]any) [
 	}
 
 	return whereConditions
+}
+
+// GetCountTransactionsByFields получает количество транзакций, удовлетворяющих условию.
+func (r *Repo) GetCountTransactionsByFields(ctx context.Context, fields map[string]any) (int, error) {
+	if len(fields) == 0 {
+		return 0, fmt.Errorf("fields map is empty")
+	}
+
+	sb := sqlbuilder.NewSelectBuilder()
+	sb.SetFlavor(sqlbuilder.PostgreSQL)
+	sb.Select("COUNT(*)").
+		From("transactions.transactions")
+
+	whereConditions := buildWhereConditions(sb, fields)
+	if len(whereConditions) == 0 {
+		return 0, fmt.Errorf("no valid fields for where condition")
+	}
+
+	if len(whereConditions) == 1 {
+		sb.Where(whereConditions[0])
+	} else {
+		sb.Where(sb.And(whereConditions...))
+	}
+
+	query, args := sb.Build()
+
+	row := r.db.QueryRowContext(ctx, query, args...)
+
+	var count int
+
+	err := row.Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("error scanning count: %w", err)
+	}
+
+	if err := row.Err(); err != nil {
+		return 0, fmt.Errorf("error getting count transactions by fields: %w", err)
+	}
+
+	return count, nil
 }

@@ -12,6 +12,315 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
+// MocktxCounter is a mock of txCounter interface.
+type MocktxCounter struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxCounterMockRecorder
+}
+
+// MocktxCounterMockRecorder is the mock recorder for MocktxCounter.
+type MocktxCounterMockRecorder struct {
+	mock *MocktxCounter
+}
+
+// NewMocktxCounter creates a new mock instance.
+func NewMocktxCounter(ctrl *gomock.Controller) *MocktxCounter {
+	mock := &MocktxCounter{ctrl: ctrl}
+	mock.recorder = &MocktxCounterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxCounter) EXPECT() *MocktxCounterMockRecorder {
+	return m.recorder
+}
+
+// AddCanceledTransactions mocks base method.
+func (m *MocktxCounter) AddCanceledTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddCanceledTransactions", count)
+}
+
+// AddCanceledTransactions indicates an expected call of AddCanceledTransactions.
+func (mr *MocktxCounterMockRecorder) AddCanceledTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCanceledTransactions", reflect.TypeOf((*MocktxCounter)(nil).AddCanceledTransactions), count)
+}
+
+// AddFailedTransactions mocks base method.
+func (m *MocktxCounter) AddFailedTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddFailedTransactions", count)
+}
+
+// AddFailedTransactions indicates an expected call of AddFailedTransactions.
+func (mr *MocktxCounterMockRecorder) AddFailedTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFailedTransactions", reflect.TypeOf((*MocktxCounter)(nil).AddFailedTransactions), count)
+}
+
+// AddInProgressTransactions mocks base method.
+func (m *MocktxCounter) AddInProgressTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddInProgressTransactions", count)
+}
+
+// AddInProgressTransactions indicates an expected call of AddInProgressTransactions.
+func (mr *MocktxCounterMockRecorder) AddInProgressTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddInProgressTransactions", reflect.TypeOf((*MocktxCounter)(nil).AddInProgressTransactions), count)
+}
+
+// AddSuccessTransactions mocks base method.
+func (m *MocktxCounter) AddSuccessTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddSuccessTransactions", count)
+}
+
+// AddSuccessTransactions indicates an expected call of AddSuccessTransactions.
+func (mr *MocktxCounterMockRecorder) AddSuccessTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSuccessTransactions", reflect.TypeOf((*MocktxCounter)(nil).AddSuccessTransactions), count)
+}
+
+// AddTotalTransactions mocks base method.
+func (m *MocktxCounter) AddTotalTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddTotalTransactions", count)
+}
+
+// AddTotalTransactions indicates an expected call of AddTotalTransactions.
+func (mr *MocktxCounterMockRecorder) AddTotalTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTotalTransactions", reflect.TypeOf((*MocktxCounter)(nil).AddTotalTransactions), count)
+}
+
+// DecrementCanceledTransactions mocks base method.
+func (m *MocktxCounter) DecrementCanceledTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementCanceledTransactions", count)
+}
+
+// DecrementCanceledTransactions indicates an expected call of DecrementCanceledTransactions.
+func (mr *MocktxCounterMockRecorder) DecrementCanceledTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementCanceledTransactions", reflect.TypeOf((*MocktxCounter)(nil).DecrementCanceledTransactions), count)
+}
+
+// DecrementFailedTransactions mocks base method.
+func (m *MocktxCounter) DecrementFailedTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementFailedTransactions", count)
+}
+
+// DecrementFailedTransactions indicates an expected call of DecrementFailedTransactions.
+func (mr *MocktxCounterMockRecorder) DecrementFailedTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementFailedTransactions", reflect.TypeOf((*MocktxCounter)(nil).DecrementFailedTransactions), count)
+}
+
+// DecrementInProgressTransactions mocks base method.
+func (m *MocktxCounter) DecrementInProgressTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementInProgressTransactions", count)
+}
+
+// DecrementInProgressTransactions indicates an expected call of DecrementInProgressTransactions.
+func (mr *MocktxCounterMockRecorder) DecrementInProgressTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementInProgressTransactions", reflect.TypeOf((*MocktxCounter)(nil).DecrementInProgressTransactions), count)
+}
+
+// DecrementSuccessTransactions mocks base method.
+func (m *MocktxCounter) DecrementSuccessTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementSuccessTransactions", count)
+}
+
+// DecrementSuccessTransactions indicates an expected call of DecrementSuccessTransactions.
+func (mr *MocktxCounterMockRecorder) DecrementSuccessTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementSuccessTransactions", reflect.TypeOf((*MocktxCounter)(nil).DecrementSuccessTransactions), count)
+}
+
+// DecrementTotalTransactions mocks base method.
+func (m *MocktxCounter) DecrementTotalTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementTotalTransactions", count)
+}
+
+// DecrementTotalTransactions indicates an expected call of DecrementTotalTransactions.
+func (mr *MocktxCounterMockRecorder) DecrementTotalTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementTotalTransactions", reflect.TypeOf((*MocktxCounter)(nil).DecrementTotalTransactions), count)
+}
+
+// MocktxAdder is a mock of txAdder interface.
+type MocktxAdder struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxAdderMockRecorder
+}
+
+// MocktxAdderMockRecorder is the mock recorder for MocktxAdder.
+type MocktxAdderMockRecorder struct {
+	mock *MocktxAdder
+}
+
+// NewMocktxAdder creates a new mock instance.
+func NewMocktxAdder(ctrl *gomock.Controller) *MocktxAdder {
+	mock := &MocktxAdder{ctrl: ctrl}
+	mock.recorder = &MocktxAdderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxAdder) EXPECT() *MocktxAdderMockRecorder {
+	return m.recorder
+}
+
+// AddCanceledTransactions mocks base method.
+func (m *MocktxAdder) AddCanceledTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddCanceledTransactions", count)
+}
+
+// AddCanceledTransactions indicates an expected call of AddCanceledTransactions.
+func (mr *MocktxAdderMockRecorder) AddCanceledTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCanceledTransactions", reflect.TypeOf((*MocktxAdder)(nil).AddCanceledTransactions), count)
+}
+
+// AddFailedTransactions mocks base method.
+func (m *MocktxAdder) AddFailedTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddFailedTransactions", count)
+}
+
+// AddFailedTransactions indicates an expected call of AddFailedTransactions.
+func (mr *MocktxAdderMockRecorder) AddFailedTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddFailedTransactions", reflect.TypeOf((*MocktxAdder)(nil).AddFailedTransactions), count)
+}
+
+// AddInProgressTransactions mocks base method.
+func (m *MocktxAdder) AddInProgressTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddInProgressTransactions", count)
+}
+
+// AddInProgressTransactions indicates an expected call of AddInProgressTransactions.
+func (mr *MocktxAdderMockRecorder) AddInProgressTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddInProgressTransactions", reflect.TypeOf((*MocktxAdder)(nil).AddInProgressTransactions), count)
+}
+
+// AddSuccessTransactions mocks base method.
+func (m *MocktxAdder) AddSuccessTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddSuccessTransactions", count)
+}
+
+// AddSuccessTransactions indicates an expected call of AddSuccessTransactions.
+func (mr *MocktxAdderMockRecorder) AddSuccessTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSuccessTransactions", reflect.TypeOf((*MocktxAdder)(nil).AddSuccessTransactions), count)
+}
+
+// AddTotalTransactions mocks base method.
+func (m *MocktxAdder) AddTotalTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddTotalTransactions", count)
+}
+
+// AddTotalTransactions indicates an expected call of AddTotalTransactions.
+func (mr *MocktxAdderMockRecorder) AddTotalTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTotalTransactions", reflect.TypeOf((*MocktxAdder)(nil).AddTotalTransactions), count)
+}
+
+// MocktxDecrementer is a mock of txDecrementer interface.
+type MocktxDecrementer struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxDecrementerMockRecorder
+}
+
+// MocktxDecrementerMockRecorder is the mock recorder for MocktxDecrementer.
+type MocktxDecrementerMockRecorder struct {
+	mock *MocktxDecrementer
+}
+
+// NewMocktxDecrementer creates a new mock instance.
+func NewMocktxDecrementer(ctrl *gomock.Controller) *MocktxDecrementer {
+	mock := &MocktxDecrementer{ctrl: ctrl}
+	mock.recorder = &MocktxDecrementerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxDecrementer) EXPECT() *MocktxDecrementerMockRecorder {
+	return m.recorder
+}
+
+// DecrementCanceledTransactions mocks base method.
+func (m *MocktxDecrementer) DecrementCanceledTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementCanceledTransactions", count)
+}
+
+// DecrementCanceledTransactions indicates an expected call of DecrementCanceledTransactions.
+func (mr *MocktxDecrementerMockRecorder) DecrementCanceledTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementCanceledTransactions", reflect.TypeOf((*MocktxDecrementer)(nil).DecrementCanceledTransactions), count)
+}
+
+// DecrementFailedTransactions mocks base method.
+func (m *MocktxDecrementer) DecrementFailedTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementFailedTransactions", count)
+}
+
+// DecrementFailedTransactions indicates an expected call of DecrementFailedTransactions.
+func (mr *MocktxDecrementerMockRecorder) DecrementFailedTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementFailedTransactions", reflect.TypeOf((*MocktxDecrementer)(nil).DecrementFailedTransactions), count)
+}
+
+// DecrementInProgressTransactions mocks base method.
+func (m *MocktxDecrementer) DecrementInProgressTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementInProgressTransactions", count)
+}
+
+// DecrementInProgressTransactions indicates an expected call of DecrementInProgressTransactions.
+func (mr *MocktxDecrementerMockRecorder) DecrementInProgressTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementInProgressTransactions", reflect.TypeOf((*MocktxDecrementer)(nil).DecrementInProgressTransactions), count)
+}
+
+// DecrementSuccessTransactions mocks base method.
+func (m *MocktxDecrementer) DecrementSuccessTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementSuccessTransactions", count)
+}
+
+// DecrementSuccessTransactions indicates an expected call of DecrementSuccessTransactions.
+func (mr *MocktxDecrementerMockRecorder) DecrementSuccessTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementSuccessTransactions", reflect.TypeOf((*MocktxDecrementer)(nil).DecrementSuccessTransactions), count)
+}
+
+// DecrementTotalTransactions mocks base method.
+func (m *MocktxDecrementer) DecrementTotalTransactions(count int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "DecrementTotalTransactions", count)
+}
+
+// DecrementTotalTransactions indicates an expected call of DecrementTotalTransactions.
+func (mr *MocktxDecrementerMockRecorder) DecrementTotalTransactions(count interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementTotalTransactions", reflect.TypeOf((*MocktxDecrementer)(nil).DecrementTotalTransactions), count)
+}
+
 // MockrequestsRepo is a mock of requestsRepo interface.
 type MockrequestsRepo struct {
 	ctrl     *gomock.Controller
@@ -48,6 +357,21 @@ func (m *MockrequestsRepo) GetAllTransactionsByFields(ctx context.Context, field
 func (mr *MockrequestsRepoMockRecorder) GetAllTransactionsByFields(ctx, fields interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllTransactionsByFields", reflect.TypeOf((*MockrequestsRepo)(nil).GetAllTransactionsByFields), ctx, fields)
+}
+
+// GetCountTransactionsByFields mocks base method.
+func (m *MockrequestsRepo) GetCountTransactionsByFields(ctx context.Context, fields map[string]any) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCountTransactionsByFields", ctx, fields)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCountTransactionsByFields indicates an expected call of GetCountTransactionsByFields.
+func (mr *MockrequestsRepoMockRecorder) GetCountTransactionsByFields(ctx, fields interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCountTransactionsByFields", reflect.TypeOf((*MockrequestsRepo)(nil).GetCountTransactionsByFields), ctx, fields)
 }
 
 // UpdateStatusMany mocks base method.

@@ -2,6 +2,7 @@ package uow
 
 import (
 	"db-worker/internal/config/operation"
+	uowmocks "db-worker/internal/service/uow/mocks"
 	"db-worker/internal/storage"
 	"db-worker/internal/storage/mocks"
 	"db-worker/internal/storage/testtransaction"
@@ -186,8 +187,9 @@ func TestSaveRequests(t *testing.T) {
 
 			systemDriver := mocks.NewMockDriver(ctrl)
 			userDriver := mocks.NewMockDriver(ctrl)
+			metricsService := uowmocks.NewMocktxCounter(ctrl)
 
-			svc := newTestService(t, systemDriver, userDriver)
+			svc := newTestService(t, systemDriver, userDriver, metricsService)
 
 			tt.setupMocks(t, userDriver, systemDriver)
 
